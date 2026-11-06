@@ -1,7 +1,5 @@
 # Regras de negócio: Hotel Host 
 
-Junta o documento de regras do grupo com os rascunhos do colega (`README.md` e `perguntas_de_negocio.md`). A numeração RN-01 a RN-06 segue o README do colega, para que README e perguntas continuem válidos. As regras novas começam em RN-07. A seção 13 mostra o que veio de cada lado e o que foi decidido; pode ser apagada antes da entrega.
-
 O Hotel Host é um hotel fictício de pequeno porte. Todos os dados de exemplo são fictícios (nada de CPF, e-mail ou telefone reais, por causa da LGPD).
 
 ## 1. O problema
