@@ -1,0 +1,102 @@
+@startuml hotel
+' Configurações Visuais
+hide circle
+skinparam linetype ortho
+skinparam monochrome true
+skinparam shadowing false
+
+' ==========================================
+' ENTIDADES DO MODELO (Total: 7 Entidades)
+' ==========================================
+
+entity "Hospede" as hospede {
+  * id_hospede : int <<PK>>
+  --
+  * cpf : varchar(11) <<UNIQUE>>
+  * nome_completo : varchar(100)
+  * email : varchar(100) <<UNIQUE>>
+  telefone : varchar(20)
+  * data_cadastro : date
+}
+
+entity "Categoria_Quarto" as categoria {
+  * id_categoria : int <<PK>>
+  --
+  * nome_categoria : varchar(50)
+  * capacidade_maxima : int
+  * valor_diaria_base : decimal
+}
+
+entity "Quarto" as quarto {
+  * id_quarto : int <<PK>>
+  --
+  * id_categoria : int <<FK>>
+  * numero_quarto : varchar(10) <<UNIQUE>>
+  andar : int
+  * status_manutencao : boolean
+}
+
+entity "Reserva" as reserva {
+  * id_reserva : int <<PK>>
+  --
+  * id_hospede : int <<FK>>
+  * id_quarto : int <<FK>>
+  * data_reserva : timestamp
+  * data_entrada_prevista : date
+  * data_saida_prevista : date
+  data_checkin_real : timestamp
+  data_checkout_real : timestamp
+  * status_reserva : varchar <<CHECK: PENDENTE, CONFIRMADA, CHECK-IN, CHECK-OUT, CANCELADA, NO-SHOW>>
+  * valor_total_bruto : decimal
+  * percentual_desconto : decimal
+  valor_final_pago : decimal
+}
+
+entity "Cancelamento" as cancelamento {
+  * id_cancelamento : int <<PK>>
+  --
+  * id_reserva : int <<FK, UNIQUE>>
+  * data_cancelamento : timestamp
+  * taxa_multa_aplicada : decimal
+  motivo_cancelamento : varchar
+}
+
+' Entidades para resolução do N:M
+entity "Servico" as servico {
+  * id_servico : int <<PK>>
+  --
+  * nome_servico : varchar(100)
+  * valor_unitario : decimal
+}
+
+entity "Consumo_Servico" as consumo {
+  * id_consumo : int <<PK>>
+  --
+  * id_reserva : int <<FK>>
+  * id_servico : int <<FK>>
+  * quantidade : int
+  * data_consumo : timestamp
+  * valor_total_item : decimal
+}
+
+' ==========================================
+' CARDINALIDADES EXPLÍCITAS (Min e Max)
+' ==========================================
+
+' Um hóspede faz zero ou muitas reservas / Uma reserva pertence a um único hóspede (obrigatório)
+hospede "1..1" ||--o{ "0..N" reserva : realiza >
+
+' Uma categoria possui um ou muitos quartos / Um quarto pertence a uma única categoria (obrigatório)
+categoria "1..1" ||--|{ "1..N" quarto : agrupa >
+
+' Um quarto pode ter zero ou muitas reservas / Uma reserva é para um único quarto (obrigatório)
+quarto "1..1" ||--o{ "0..N" reserva : recebe >
+
+' Uma reserva pode ter zero ou um cancelamento / Um cancelamento é sobre uma única reserva
+reserva "1..1" ||--o| "0..1" cancelamento : pode ter >
+
+' Resolução da relação N:M (Reserva x Serviço)
+reserva "1..1" ||--o{ "0..N" consumo : engloba >
+servico "1..1" ||--o{ "0..N" consumo : é consumido em >
+
+@enduml
