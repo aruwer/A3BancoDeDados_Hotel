@@ -1,4 +1,6 @@
-# Regras de negócio: Hotel Host 
+# Regras de negócio: Hotel Host
+
+Documento de referência das regras do Hotel Host. A numeração RN-01 a RN-12 é a mesma usada no `README.md` e em `docs/perguntas_de_negocio.md`. Os detalhes de cada regra (fronteiras, código de erro e onde vira código) estão nas seções a seguir.
 
 O Hotel Host é um hotel fictício de pequeno porte. Todos os dados de exemplo são fictícios (nada de CPF, e-mail ou telefone reais, por causa da LGPD).
 
@@ -10,7 +12,7 @@ A recepção controla reservas, hóspedes e cobranças em planilha e papel. Isso
 
 ## 2. Como ler este documento
 
-- **Núcleo**: regras que o grupo implementa de qualquer forma. Sozinhas cobrem o que a rubrica pede (2 procedures, 1 trigger, constraints, consultas com fronteira).
+- **Núcleo**: regras que são implementadas de qualquer forma. Sozinhas cobrem o que a rubrica pede (2 procedures, 1 trigger, constraints, consultas com fronteira).
 - **Extra**: regras que enriquecem o projeto. Se o tempo apertar (escopo de cerca de 26 horas), cortem as extras: um modelo pequeno, completo e testado vale mais que um grande pela metade.
 - Toda regra tem número-limite, fronteiras para testar, onde vira código e código de erro.
 - Todo valor de fronteira vira linha em `02_inserts.sql` e teste automatizado.
@@ -186,7 +188,7 @@ Teste de mutação recomendado: apagar o FOR UPDATE ou trocar a comparação de 
 
 ### 9.1 Sobreposição em trigger (destaque, com cuidado no Oracle)
 
-O rascunho do colega previa o trigger `trg_reserva_sobreposicao`. A ideia é boa (protege quem faz INSERT direto), mas tem uma armadilha:
+O trigger `trg_reserva_sobreposicao` protege quem faz INSERT direto na tabela, mas tem uma armadilha:
 
 - **PostgreSQL:** funciona com um trigger comum BEFORE INSERT OR UPDATE. Primeiro trava a linha do quarto (`SELECT ... FOR UPDATE`), depois procura reserva ativa sobreposta, ignorando a própria linha.
 - **Oracle:** um trigger de linha que consulta a própria tabela RESERVA dá **ORA-04091 (tabela mutante)**. A saída correta é um **trigger composto** (`COMPOUND TRIGGER`): a seção BEFORE EACH ROW trava o quarto e guarda os dados da linha numa coleção; a seção AFTER STATEMENT confere as sobreposições. Evitem `PRAGMA AUTONOMOUS_TRANSACTION`, que esconde o problema e quebra a atomicidade.
@@ -221,49 +223,35 @@ Sem o trigger, a RN-02 continua garantida pela procedure, mas não para INSERT d
 - **A identidade não volta no rollback:** testes e aplicações nunca assumem um id fixo para a próxima reserva.
 - **Conexão:** usuário e senha de laboratório vindos de variável de ambiente, definidos no `docker-compose.yml`, que avisa que são de laboratório.
 
-## 12. Decisões em aberto para o grupo
+## 12. Decisões de projeto
 
 | # | Decisão | Proposta |
 |---|---|---|
 | D-01 | Sobreposição também em trigger (`trg_reserva_sobreposicao`)? | Entregar primeiro a procedure com FOR UPDATE. O trigger entra depois, como destaque, só se sobrar tempo (Oracle exige trigger composto). |
-| D-02 | Check-out deixa o quarto em LIMPEZA (proposto) ou direto em DISPONIVEL? | LIMPEZA, que dá uso ao status do rascunho do colega; a volta a DISPONIVEL é um UPDATE. |
+| D-02 | Check-out deixa o quarto em LIMPEZA (proposto) ou direto em DISPONIVEL? | LIMPEZA, que dá ao quarto um ciclo realista após o check-out; a volta a DISPONIVEL é um UPDATE. |
 | D-03 | Manter o sinal de 30% (RN-10)? | Manter como Extra; é fácil de cortar. Sem ele, o estorno do cancelamento é sempre 0 e a regra de estorno perde graça. |
 | D-04 | Uma reserva = um quarto? | Sim. |
 | D-05 | Procedures sem parâmetro OUT? | Sim, com a recuperação do id por consulta. |
-| D-06 | Desconto de fidelidade aplicado no check-out (rascunho do colega) ou na reserva? | No check-out, porque a base de cálculo (estadias concluídas) fica mais clara e o sinal usa a diária cheia. |
-| D-07 | Q05 mostra meses sem receita (exige gerador de meses, diferente nos dois bancos) ou só meses com receita? | Só meses com receita, a menos que o grupo queira o desafio de dialeto. |
+| D-06 | Desconto de fidelidade aplicado no check-out ou na reserva? | No check-out, porque a base de cálculo (estadias concluídas) fica mais clara e o sinal usa a diária cheia. |
+| D-07 | Q05 mostra meses sem receita (exige gerador de meses, diferente nos dois bancos) ou só meses com receita? | Só meses com receita, a menos que se queira o desafio de dialeto. |
 | D-08 | Os valores (30%, 7 e 2 dias, 12:00 e 18:00, 30 noites, 5% e 10%) ficam assim? | Qualquer troca é simples, desde que cada número apareça nos dados de fronteira e nos testes. |
-| D-09 | Quem fica com cada procedure e cada trigger? | Cada integrante precisa saber explicar qualquer trecho na defesa. |
 
-## 13. Reconciliação: o que veio de cada lado
+## 13. Resumo das decisões de modelagem
 
-### 13.1 Em comum (mantido)
+### 13.1 Decisões que fecham pontos em aberto
 
-- As mesmas 8 entidades e o N:M resolvido pela entidade associativa de consumo.
-- Estadia de 1 a 30 noites e intervalo [entrada, saída), com sair e entrar no mesmo dia permitido.
-- Capacidade do quarto, cancelamento com faixas de 7 e 2 dias, fidelidade em 5 e 10 estadias, status de quarto em manutenção.
-- Procedures sem COMMIT, ON DELETE explícito, datas relativas a hoje, índices em arquivo separado, dupla defesa (procedure e trigger).
+| Ponto | Decisão |
+|---|---|
+| Multa de cancelamento | 2 a 6 dias: 50% da primeira diária; menos de 2 dias ou no-show: 100% da primeira diária (só depende de D, a antecedência em dias) |
+| No-show | Status NO_SHOW, gerado por `cancelar_reserva` quando a data de entrada já passou sem check-in |
+| Desconto de fidelidade | 5% (5 a 9 estadias concluídas) e 10% (10 ou mais), aplicado no check-out |
+| Status do quarto | DISPONIVEL, OCUPADO, LIMPEZA e MANUTENCAO, com ciclo definido |
+| Sobreposição em trigger | Procedure no núcleo; trigger como destaque, com o aviso do ORA-04091 |
+| Nome do check-in | `fazer_checkin` |
+| Entidade de consumo | `CONSUMO_RESERVA`, com `preco_unitario` copiado no lançamento |
 
-### 13.2 Conflitos e como foram resolvidos
+### 13.2 Ajustes no modelo exigidos pelas consultas
 
-| Ponto | Rascunho do colega | Doc do grupo | Resolvido |
-|---|---|---|---|
-| Multa de cancelamento | 2 a 6 dias: 50% da primeira diária; menos de 2 dias ou no-show: 100% | 2 a 6 dias: 1 diária; 0 a 1 dia: 50% do total | Valores do colega, mais simples (só dependem de D) |
-| No-show | citado na multa e na Q10, sem regra | não existia | Novo status NO_SHOW, gerado por `cancelar_reserva` quando a entrada já passou |
-| Desconto de fidelidade | 5% (5 a 9) e 10% (10 ou mais), no check-out | 10% e 15%, na reserva | Valores e momento do colega |
-| Status do quarto | MANUTENCAO e LIMPEZA | DISPONIVEL, OCUPADO, MANUTENCAO | União dos quatro, com ciclo definido |
-| Sobreposição em trigger | `trg_reserva_sobreposicao` | só na procedure | Procedure no núcleo; trigger como destaque, com o aviso do ORA-04091 |
-| Nome do check-in | `fazer_checkin` | `registrar_checkin` | `fazer_checkin` |
-| Entidade de consumo | CONSUMO_RESERVA, `preco_unitario` | CONSUMO, `valor_unitario` | Nomes do colega |
-| Erro de digitação no README | RN-06 citava `fazer_checkout` para check-in | — | Corrigido para `fazer_checkin` |
-
-### 13.3 Só em um dos lados e mantido
-
-- Do colega: as 10 perguntas de negócio com dados de fronteira, os índices sugeridos, a divisão relacional (Q09) e o ROLLUP (Q10).
-- Do grupo: máquina de estados, check-out com horário e taxa, quitação, sinal de 30%, códigos de erro HOTEL-xxx, trigger de capacidade, análise de concorrência, armadilhas PG × Oracle e orientações para Java e Python.
-
-### 13.4 Ajustes que as perguntas do colega exigiram no modelo
-
-- `SERVICO.categoria`: a Q09 fala em serviços da categoria Extras, que não existia.
+- `SERVICO.categoria`: a Q09 fala em serviços da categoria Extras.
 - Status NO_SHOW: a Q10 agrupa por concluída, cancelada e no-show.
 - Colunas de checkout em RESERVA (`valor_final`, `taxa_checkout`, `percentual_desconto`): necessárias para Q01, Q03 e Q05 sem recalcular tudo.
