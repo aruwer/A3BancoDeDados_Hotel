@@ -4,6 +4,9 @@
 > **Período:** 2026/2 · **Tag:** v1.0.0
 > **SGBDs:** PostgreSQL 17 e Oracle XE 21 · **Aplicações:** Python e Java
 >
+> _Esqueleto da A3. Troque tudo que está entre `< >` e apague os comentários `TODO` antes da entrega._
+> _As seções 1 a 3 seguem as regras de `docs/regras.md`; ajuste-as ao que o professor aprovar._
+
 ---
 
 ## 1. Domínio e regras de negócio
