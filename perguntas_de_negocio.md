@@ -4,9 +4,9 @@
 > `postgresql/03_consultas.sql` e `oracle/03_consultas.sql`, com a pergunta
 > copiada no comentário `-- @Qnn`. O resultado esperado deve ser o mesmo nos dois bancos.
 >
-> Versão unificada: parte do rascunho do colega e incorpora as decisões do `docs/regras.md`
-> (status NO_SHOW, LIMPEZA, desconto no check-out, colunas de checkout). As linhas marcadas
-> **Decisão** resolvem pontos que o rascunho deixava em aberto; o grupo pode trocar.
+> As linhas marcadas **Decisão** fixam os pontos que as perguntas deixariam em aberto
+> (status NO_SHOW e LIMPEZA, desconto no check-out, colunas de checkout, ver `docs/regras.md`);
+> podem ser trocadas, desde que o teste e os dados de fronteira acompanhem.
 
 ## Convenções (valem para todas as consultas)
 
@@ -103,7 +103,7 @@
 
 ## Banco de reserva (se alguma pergunta cair)
 
-Ideias que saíram do `docs/regras.md` e podem substituir uma das 10 ou virar teste extra:
+Ideias a partir do `docs/regras.md` que podem substituir uma das 10 ou virar teste extra:
 
 - Taxa de ocupação por tipo de quarto no mês (JOIN + agregação).
 - Próxima reserva de cada quarto (ROW_NUMBER com PARTITION BY).
