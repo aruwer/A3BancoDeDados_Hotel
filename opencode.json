@@ -1,0 +1,11 @@
+﻿{
+  "permissions": {
+    "git": {
+      "push": "deny",
+      "commit": "ask"
+    },
+    "terminal": {
+      "execute": "ask"
+    }
+  }
+}
