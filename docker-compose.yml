@@ -1,0 +1,35 @@
+﻿services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: hotelhost-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: hotel
+      POSTGRES_USER: hotel
+      POSTGRES_PASSWORD: hotel_dev_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hotel -d hotel"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  oracle:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: hotelhost-oracle
+    restart: unless-stopped
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: hotel_sys_password
+      APP_USER: hotel
+      APP_USER_PASSWORD: hotel_dev_password
+      ORACLE_DATABASE: XEPDB1
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s hotel/hotel_dev_password@//localhost:1521/XEPDB1 | grep -q 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 40
+      start_period: 60s
