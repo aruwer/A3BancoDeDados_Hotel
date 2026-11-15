@@ -50,7 +50,7 @@ INSERT INTO Hospede (id_hospede, cpf, nome_completo, email, telefone, data_cadas
     (3, '52998224725', 'Fernanda Rocha Almeida', 'fernanda.almeida@gmail.com', '(21) 97654-3210', CURRENT_DATE - 80),
     (4, '98765432100', 'João Pedro Vasconcelos', 'joao.vasconcelos@hotmail.com', '(31) 99876-5432', CURRENT_DATE - 75),
     (5, '24681357928', 'Mariana Costa Ferreira', 'mariana.ferreira@gmail.com',  '(41) 98234-5678', CURRENT_DATE - 70),
-    (6, '13579246828', 'Ricardo Alves Teixeira', 'ricardo.teixeira@hotmail.com', '(51) 99345-6789', CURRENT_DATE - 65,
+    (6, '13579246828', 'Ricardo Alves Teixeira', 'ricardo.teixeira@hotmail.com', '(51) 99345-6789', CURRENT_DATE - 65),
     (7, '11223344517', 'Luciana Prado Nogueira', 'luciana.nogueira@gmail.com', '(85) 98456-7890', CURRENT_DATE - 60),
     (8, '31415926590', 'Gabriel Santos Oliveira', 'gabriel.oliveira@hotmail.com', '(62) 99567-8901', CURRENT_DATE - 70);
 
