@@ -1,7 +1,7 @@
 -- 02_inserts.sql
 -- Banco de Dados: PostgreSQL 17
--- Carga de dados fictícia (LGPD): nenhum CPF, e-mail ou telefone real.
---   * CPFs começam com 000 (inválidos de propósito); e-mails usam example.com (domínio reservado).
+-- Carga de dados fictícia para fins acadêmicos (LGPD): os hóspedes são inventados e não
+-- representam pessoas reais.
 -- Todas as datas são RELATIVAS a CURRENT_DATE / CURRENT_TIMESTAMP, então as consultas
 -- dão o mesmo resultado em qualquer dia de execução.
 -- Execução (banco vazio, logo após o 01_ddl.sql):
@@ -9,8 +9,8 @@
 --   psql -v ON_ERROR_STOP=1 -f postgresql/02_inserts.sql
 --
 -- DADOS DE FRONTEIRA
---   F1 (empate no RANK): Elisa (hósp. 5) e Fábio (hósp. 6) gastaram exatamente R$ 800,00
---      (reservas 7 e 8) => posição 5 repetida; Gabriela fica em 7º. Ana e Bruno têm 2 estadias cada.
+--   F1 (empate no RANK): Mariana (hósp. 5) e Ricardo (hósp. 6) gastaram exatamente R$ 800,00
+--      (reservas 7 e 8) => posição 5 repetida; Luciana fica em 7º. Ana e Carlos têm 2 estadias cada.
 --   F2 (limite da multa de cancelamento, regras.md seção 4.1; D = diária; antecedência em dias
 --      contada a partir de hoje, data do cancelamento):
 --        reserva 13: 7 dias => sem multa (limite inferior da faixa sem multa)
@@ -22,8 +22,6 @@
 --
 -- Totais gastos (diárias + consumos) das reservas CHECK-OUT, para conferir o ranking:
 --  João Pedro 2420,00 | Carlos Eduardo 2250,00 | Ana Beatriz 1550,00 | Fernanda 1200,00 | Mariana 800,00 = Ricardo 800,00 | Luciana 400,00
-
-
 
 BEGIN;
 
@@ -139,4 +137,3 @@ SELECT setval(pg_get_serial_sequence('cancelamento',     'id_cancelamento'), (SE
 SELECT setval(pg_get_serial_sequence('consumo_servico',  'id_consumo'),    (SELECT MAX(id_consumo)     FROM Consumo_Servico));
 
 COMMIT;
-
