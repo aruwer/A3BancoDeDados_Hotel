@@ -1,7 +1,27 @@
 -- 02_inserts.sql
 -- Banco de Dados: PostgreSQL 17
+-- Carga de dados fictícia (LGPD): nenhum CPF, e-mail ou telefone real.
+--   * CPFs começam com 000 (inválidos de propósito); e-mails usam example.com (domínio reservado).
+-- Todas as datas são RELATIVAS a CURRENT_DATE / CURRENT_TIMESTAMP, então as consultas
+-- dão o mesmo resultado em qualquer dia de execução.
+-- Execução (banco vazio, logo após o 01_ddl.sql):
+--   psql -v ON_ERROR_STOP=1 -f postgresql/01_ddl.sql
+--   psql -v ON_ERROR_STOP=1 -f postgresql/02_inserts.sql
+--
+-- DADOS DE FRONTEIRA
+--   F1 (empate no RANK): Elisa (hósp. 5) e Fábio (hósp. 6) gastaram exatamente R$ 800,00
+--      (reservas 7 e 8) => posição 5 repetida; Gabriela fica em 7º. Ana e Bruno têm 2 estadias cada.
+--   F2 (limite da multa de cancelamento, regras.md seção 4.1; D = diária; antecedência em dias
+--      contada a partir de hoje, data do cancelamento):
+--        reserva 13: 7 dias => sem multa (limite inferior da faixa sem multa)
+--        reserva 14: 6 dias => 50% de D (limite superior da faixa de 50%)
+--        reserva 15: 2 dias => 50% de D (limite inferior da faixa de 50%)
+--        reserva 16: 1 dia  => 100% de D (primeiro dia da faixa de 100%)
+--        reserva 17: NO-SHOW (entrada já passou sem check-in) => 100% de D
+--   F3 (NOT EXISTS): o quarto 302 (ativo) e o quarto 103 (em manutenção) não têm nenhuma reserva.
+--
 -- Totais gastos (diárias + consumos) das reservas CHECK-OUT, para conferir o ranking:
---  João Pedro 2420,00 | Carlos Eduardo 2250,00 | Ana Beatriz 1550,00 | Fernanda 1200,00 | Mariana 800,00 = Ricardo 800,00 | Luciana 400,00
+--   Diego 2420,00 | Bruno 2250,00 | Ana 1550,00 | Carla 1200,00 | Elisa 800,00 = Fábio 800,00 | Gabriela 400,00
 
 BEGIN;
 
@@ -23,14 +43,14 @@ INSERT INTO Quarto (id_quarto, id_categoria, numero_quarto, andar, status_manute
 
 -- 3) Hóspedes (todos fictícios)
 INSERT INTO Hospede (id_hospede, cpf, nome_completo, email, telefone, data_cadastro) VALUES
-    (1, '12345678909', 'Ana Beatriz Souza Lima', 'ana.lima@gmail.com', '(51) 99123-4567', CURRENT_DATE - 90),
-    (2, '11144477735', 'Carlos Eduardo Menezes', 'carlos.menezes@hotmail.com', '(11) 98765-4321', CURRENT_DATE - 85),
-    (3, '52998224725', 'Fernanda Rocha Almeida', 'fernanda.almeida@gmail.com', '(21) 97654-3210', CURRENT_DATE - 80),
-    (4, '98765432100', 'João Pedro Vasconcelos', 'joao.vasconcelos@hotmail.com', '(31) 99876-5432', CURRENT_DATE - 75),
-    (5, '24681357928', 'Mariana Costa Ferreira', 'mariana.ferreira@gmail.com',  '(41) 98234-5678', CURRENT_DATE - 70),
-    (6, '13579246828', 'Ricardo Alves Teixeira', 'ricardo.teixeira@hotmail.com', '(51) 99345-6789', CURRENT_DATE - 65),
-    (7, '11223344517', 'Luciana Prado Nogueira', 'luciana.nogueira@gmail.com', '(85) 98456-7890', CURRENT_DATE - 60),
-    (8, '31415926590', 'Gabriel Santos Oliveira', 'gabriel.oliveira@hotmail.com', '(62) 99567-8901', CURRENT_DATE - 55);
+    (1, '12345678909', 'Ana Beatriz Souza Lima', 'ana.lima@gmail.com', '(51) 99123-4567', 2025-01-14),
+    (2, '11144477735', 'Carlos Eduardo Menezes', 'carlos.menezes@hotmail.com', '(11) 98765-4321', 2025-02-03),
+    (3, '52998224725', 'Fernanda Rocha Almeida', 'fernanda.almeida@gmail.com', '(21) 97654-3210', 2025-03-22),
+    (4, '98765432100', 'João Pedro Vasconcelos', 'joao.vasconcelos@hotmail.com', '(31) 99876-5432', 2025-05-09),
+    (5, '24681357928', 'Mariana Costa Ferreira', 'mariana.ferreira@gmail.com',  '(41) 98234-5678', 2025-06-30),
+    (6, '13579246828', 'Ricardo Alves Teixeira', 'ricardo.teixeira@hotmail.com', '(51) 99345-6789', 2025-08-17),
+    (7, '11223344517', 'Luciana Prado Nogueira', 'luciana.nogueira@gmail.com', '(85) 98456-7890', 2025-09-05),
+    (8, '31415926590', 'Gabriel Santos Oliveira', 'gabriel.oliveira@hotmail.com', '(62) 99567-8901', 2025-10-12);
 
 -- 4) Serviços
 INSERT INTO Servico (id_servico, nome_servico, valor_unitario) VALUES

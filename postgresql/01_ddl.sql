@@ -1,6 +1,8 @@
--- 01_ddl_postgres.sql
--- Banco de Dados: PostgreSQL
+-- 01_ddl.sql
+-- Banco de Dados: PostgreSQL 17
 -- Atende aos Critérios: 7 Entidades, Estados Claros na Reserva e Tabela Associativa N:M.
+-- Convenção de constraints: pk_ (chave primária), fk_ (chave estrangeira),
+-- uk_ (única), ck_ (check). Toda FK declara ON DELETE explicitamente.
 
 CREATE TABLE Hospede (
     id_hospede SERIAL,
