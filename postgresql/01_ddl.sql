@@ -1,6 +1,8 @@
--- 01_ddl_postgres.sql
--- Banco de Dados: PostgreSQL
+-- 01_ddl.sql
+-- Banco de Dados: PostgreSQL 17
 -- Atende aos Critérios: 7 Entidades, Estados Claros na Reserva e Tabela Associativa N:M.
+-- Convenção de constraints: pk_ (chave primária), fk_ (chave estrangeira),
+-- uk_ (única), ck_ (check). Toda FK declara ON DELETE explicitamente.
 
 CREATE TABLE Hospede (
     id_hospede SERIAL,
@@ -33,7 +35,7 @@ CREATE TABLE Quarto (
     CONSTRAINT pk_quarto PRIMARY KEY (id_quarto),
     CONSTRAINT uk_quarto_numero UNIQUE (numero_quarto),
     CONSTRAINT fk_quarto_categoria FOREIGN KEY (id_categoria)
-        REFERENCES Categoria_Quarto(id_categoria) ON DELETE RESTRICT
+    REFERENCES Categoria_Quarto(id_categoria) ON DELETE RESTRICT
 );
 
 CREATE TABLE Reserva (
@@ -51,9 +53,9 @@ CREATE TABLE Reserva (
     valor_final_pago DECIMAL(10,2),
     CONSTRAINT pk_reserva PRIMARY KEY (id_reserva),
     CONSTRAINT fk_reserva_hospede FOREIGN KEY (id_hospede)
-        REFERENCES Hospede(id_hospede) ON DELETE RESTRICT,
+    REFERENCES Hospede(id_hospede) ON DELETE RESTRICT,
     CONSTRAINT fk_reserva_quarto FOREIGN KEY (id_quarto)
-        REFERENCES Quarto(id_quarto) ON DELETE RESTRICT,
+    REFERENCES Quarto(id_quarto) ON DELETE RESTRICT,
     CONSTRAINT ck_reserva_datas CHECK (data_saida_prevista > data_entrada_prevista),
     CONSTRAINT ck_reserva_status CHECK (status_reserva IN ('PENDENTE', 'CONFIRMADA', 'CHECK-IN', 'CHECK-OUT', 'CANCELADA', 'NO-SHOW'))
 );
@@ -67,7 +69,7 @@ CREATE TABLE Cancelamento (
     CONSTRAINT pk_cancelamento PRIMARY KEY (id_cancelamento),
     CONSTRAINT uk_cancelamento_reserva UNIQUE (id_reserva),
     CONSTRAINT fk_cancelamento_reserva FOREIGN KEY (id_reserva)
-        REFERENCES Reserva(id_reserva) ON DELETE CASCADE
+    REFERENCES Reserva(id_reserva) ON DELETE CASCADE
 );
 
 -- RESOLUÇÃO N:M (Reserva x Serviços Consumidos)
@@ -88,8 +90,8 @@ CREATE TABLE Consumo_Servico (
     valor_total_item DECIMAL(10,2) NOT NULL,
     CONSTRAINT pk_consumo_servico PRIMARY KEY (id_consumo),
     CONSTRAINT fk_consumo_reserva FOREIGN KEY (id_reserva)
-        REFERENCES Reserva(id_reserva) ON DELETE CASCADE,
+    REFERENCES Reserva(id_reserva) ON DELETE CASCADE,
     CONSTRAINT fk_consumo_servico FOREIGN KEY (id_servico)
-        REFERENCES Servico(id_servico) ON DELETE RESTRICT,
+    REFERENCES Servico(id_servico) ON DELETE RESTRICT,
     CONSTRAINT ck_consumo_quantidade CHECK (quantidade > 0)
 );
