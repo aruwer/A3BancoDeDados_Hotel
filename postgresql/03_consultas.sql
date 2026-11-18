@@ -156,3 +156,158 @@ FROM (
     HAVING SUM(r.valor_final_pago) > 0
 ) mensal
 ORDER BY mes;
+
+-- ---------------------------------------------------------------------------
+-- @Q06 · Tipos de quarto com cancelamento acima de 20% (JOIN + GROUP BY/HAVING)
+-- Pergunta: Quais categorias de quarto têm taxa de cancelamento acima de 20%
+--   das reservas feitas?
+-- Taxa = reservas CANCELADA / todas as reservas da categoria (qualquer status).
+-- NO-SHOW não conta como cancelamento.
+-- Fronteira: categoria com taxa EXATAMENTE 20% (não entra) e categoria com 0 cancelamentos.
+-- Resultado esperado (calculado à mão com 02_inserts.sql):
+--   Standard | 5 | 1 | 20.0   (reserva 15 cancelada de 5 total) -> NÃO entra (igual a 20%)
+--   Superior | 4 | 1 | 25.0   (reserva 14 cancelada de 4 total) -> ENTRA
+--   Suíte    | 2 | 1 | 50.0   (reserva 13 cancelada de 2 total) -> ENTRA
+SELECT c.nome_categoria,
+       COUNT(*) AS total_reservas,
+       COUNT(*) FILTER (WHERE r.status_reserva = 'CANCELADA') AS canceladas,
+       ROUND(100.0 * COUNT(*) FILTER (WHERE r.status_reserva = 'CANCELADA') / COUNT(*), 1) AS taxa_cancelamento
+FROM Reserva r
+JOIN Quarto q ON q.id_quarto = r.id_quarto
+JOIN Categoria_Quarto c ON c.id_categoria = q.id_categoria
+GROUP BY c.id_categoria, c.nome_categoria
+HAVING 100.0 * COUNT(*) FILTER (WHERE r.status_reserva = 'CANCELADA') / COUNT(*) > 20
+ORDER BY taxa_cancelamento DESC, c.nome_categoria;
+
+-- ---------------------------------------------------------------------------
+-- @Q07 · Participação de cada serviço na receita de consumo (LEFT JOIN + window sobre agregação)
+-- Pergunta: Que percentual da receita de consumos vem de cada serviço?
+-- Serviço nunca consumido aparece com 0 (LEFT JOIN). Percentual = receita_servico / SUM(receita) OVER ().
+-- Fronteira: dois serviços com mesmo total e um serviço nunca consumido.
+-- Receita de consumo = soma de valor_total_item (quantidade x preço copiado no lançamento).
+-- Resultado esperado (calculado à mão com 02_inserts.sql):
+--   Jantar        | 540.00 | 25.0
+--   Spa           | 450.00 | 20.8
+--   Café da manhã | 280.00 | 13.0
+--   Estacionamento |  40.00 |  1.9
+--   Frigobar      |  50.00 |  2.3
+--   Lavanderia    |  45.00 |  2.1
+-- Total = 2155.00
+WITH receita_servico AS (
+    SELECT s.id_servico,
+           s.nome_servico,
+           COALESCE(SUM(cs.valor_total_item), 0) AS receita
+    FROM Servico s
+    LEFT JOIN Consumo_Servico cs ON cs.id_servico = s.id_servico
+    GROUP BY s.id_servico, s.nome_servico
+)
+SELECT nome_servico,
+       receita,
+       ROUND(100.0 * receita / NULLIF(SUM(receita) OVER (), 0), 1) AS percentual
+FROM receita_servico
+ORDER BY receita DESC, nome_servico;
+
+-- ---------------------------------------------------------------------------
+-- @Q08 · Última estadia concluída de cada hóspede (JOIN + ROW_NUMBER)
+-- Pergunta: Para cada hóspede, qual foi a estadia concluída mais recente
+--   (quarto, datas e valor) e há quantos dias ela terminou?
+-- Desempate: maior id_reserva. Hóspede sem CHECK-OUT não aparece.
+-- Fronteira: hóspede com uma estadia; duas estadias no mesmo dia de saída; sem estadia.
+-- Resultado esperado (calculado à mão com 02_inserts.sql):
+--   João Pedro Vasconcelos | 201 | 2026-09-24 | 2026-09-28 | 2420.00 | X dias
+--   Carlos Eduardo Menezes | 102 | 2026-10-09 | 2026-10-12 |  600.00 | X dias
+--   Ana Beatriz Souza Lima | 101 | 2026-10-15 | 2026-10-18 |  470.00 | X dias
+--   Fernanda Rocha Almeida | 202 | 2026-10-05 | 2026-10-09 | 1200.00 | X dias
+--   Mariana Costa Ferreira | 102 | 2026-10-26 | 2026-10-29 |  800.00 | X dias
+--   Ricardo Alves Teixeira | 201 | 2026-10-22 | 2026-10-24 |  800.00 | X dias
+--   Luciana Prado Nogueira | 101 | 2026-11-10 | 2026-11-12 |  400.00 | X dias
+SELECT t.nome_completo,
+       q.numero_quarto,
+       c.nome_categoria,
+       r.data_entrada_prevista,
+       r.data_saida_prevista,
+       r.valor_final_pago,
+       (CURRENT_DATE - r.data_saida_prevista) AS dias_desde_fim
+FROM (
+    SELECT h.nome_completo,
+           r.id_reserva,
+           r.id_quarto,
+           r.data_entrada_prevista,
+           r.data_saida_prevista,
+           r.valor_final_pago,
+           ROW_NUMBER() OVER (PARTITION BY h.id_hospede
+                              ORDER BY r.data_saida_prevista DESC, r.id_reserva DESC) AS rn
+    FROM Hospede h
+    JOIN Reserva r ON r.id_hospede = h.id_hospede
+    WHERE r.status_reserva = 'CHECK-OUT'
+) t
+JOIN Quarto q ON q.id_quarto = t.id_quarto
+JOIN Categoria_Quarto c ON c.id_categoria = q.id_categoria
+WHERE t.rn = 1
+ORDER BY t.data_saida_prevista DESC, t.nome_completo;
+
+-- ---------------------------------------------------------------------------
+-- @Q09 · Hóspedes que consumiram TODOS os serviços (divisão relacional / NOT EXISTS duplo)
+-- Pergunta: Quais hóspedes já consumiram todos os serviços do catálogo?
+-- Como não há coluna 'categoria' em Servico, considera-se TODOS os serviços cadastrados.
+-- Fronteira: hóspede que usou todos menos um (não entra); serviço nunca consumido (resultado vazio).
+-- Resultado esperado (calculado à mão com 02_inserts.sql): 0 linhas (ninguém usou todos os 6 serviços)
+SELECT h.id_hospede, h.nome_completo
+FROM Hospede h
+WHERE EXISTS (SELECT 1 FROM Servico)
+  AND NOT EXISTS (
+      SELECT 1
+      FROM Servico s
+      WHERE NOT EXISTS (
+          SELECT 1
+          FROM Consumo_Servico cs
+          JOIN Reserva r ON r.id_reserva = cs.id_reserva
+          WHERE r.id_hospede = h.id_hospede
+            AND cs.id_servico = s.id_servico
+      )
+  )
+ORDER BY h.nome_completo;
+
+-- ---------------------------------------------------------------------------
+-- @Q10 · Reservas e receita por categoria e situação, com subtotais (JOIN + ROLLUP)
+-- Pergunta: Quantas reservas e quanta receita por categoria de quarto e situação
+--   (CHECK-OUT, CANCELADA, NO-SHOW), com subtotal por categoria e total geral?
+-- Receita: CHECK-OUT = valor_final_pago; CANCELADA/NO-SHOW = taxa_multa_aplicada de Cancelamento.
+-- GROUPING() distingue subtotal (por categoria) e total geral.
+-- Fronteira: categoria sem canceladas (linha some, subtotal certo); total = soma dos subtotais.
+-- Resultado esperado (calculado à mão com 02_inserts.sql):
+--   Standard    | CHECK-OUT    | 4 |  2000.00
+--   Standard    | CANCELADA    | 1 |   100.00
+--   Standard    | NO-SHOW      | 0 |     0.00
+--   Standard    | SUBTOTAL     | 5 |  2100.00
+--   Superior    | CHECK-OUT    | 3 |  2700.00
+--   Superior    | CANCELADA    | 1 |   150.00
+--   Superior    | NO-SHOW      | 0 |     0.00
+--   Superior    | SUBTOTAL     | 4 |  2850.00
+--   Suíte       | CHECK-OUT    | 2 |  3500.00
+--   Suíte       | CANCELADA    | 1 |   750.00
+--   Suíte       | NO-SHOW      | 0 |     0.00
+--   Suíte       | SUBTOTAL     | 3 |  4250.00
+--   TOTAL GERAL |              |12 |  9200.00
+SELECT CASE WHEN GROUPING(c.nome_categoria) = 1 THEN 'TOTAL GERAL' ELSE c.nome_categoria END AS categoria_quarto,
+       CASE
+           WHEN GROUPING(c.nome_categoria) = 1 THEN ''
+           WHEN GROUPING(r.status_reserva) = 1 THEN 'SUBTOTAL'
+           ELSE r.status_reserva
+       END AS situacao,
+       COUNT(*) AS reservas,
+       SUM(
+           CASE r.status_reserva
+               WHEN 'CHECK-OUT' THEN r.valor_final_pago
+               WHEN 'CANCELADA' THEN COALESCE(can.taxa_multa_aplicada, 0)
+               WHEN 'NO-SHOW'   THEN COALESCE(can.taxa_multa_aplicada, 0)
+               ELSE 0
+           END
+       ) AS receita
+FROM Reserva r
+JOIN Quarto q ON q.id_quarto = r.id_quarto
+JOIN Categoria_Quarto c ON c.id_categoria = q.id_categoria
+LEFT JOIN Cancelamento can ON can.id_reserva = r.id_reserva
+WHERE r.status_reserva IN ('CHECK-OUT', 'CANCELADA', 'NO-SHOW')
+GROUP BY ROLLUP (c.nome_categoria, r.status_reserva)
+ORDER BY GROUPING(c.nome_categoria), c.nome_categoria, GROUPING(r.status_reserva), r.status_reserva;

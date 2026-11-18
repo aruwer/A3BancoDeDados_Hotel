@@ -1,4 +1,5 @@
-﻿{
+{
+  "$schema": "https://opencode.ai/config.json",
   "permissions": {
     "git": {
       "push": "deny",
