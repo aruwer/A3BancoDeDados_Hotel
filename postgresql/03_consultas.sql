@@ -24,10 +24,13 @@
 -- A reserva 10 (CHECK-IN, Superior) não entra: a estadia ainda não foi concluída.
 SELECT c.nome_categoria,
        COUNT(*) AS estadias_concluidas,
-       ROUND(SUM(r.valor_total_bruto * (1 - COALESCE(r.percentual_desconto, 0) / 100)), 2) AS receita_diarias
-FROM Reserva r
-JOIN Quarto q ON q.id_quarto = r.id_quarto
-JOIN Categoria_Quarto c ON c.id_categoria = q.id_categoria
+       ROUND(
+           SUM(r.valor_total_bruto * (1 - COALESCE(r.percentual_desconto, 0) / 100)),
+           2
+       ) AS receita_diarias
+FROM reserva r
+JOIN quarto q ON q.id_quarto = r.id_quarto
+JOIN categoria_quarto c ON c.id_categoria = q.id_categoria
 WHERE r.status_reserva = 'CHECK-OUT'
 GROUP BY c.id_categoria, c.nome_categoria
 HAVING SUM(r.valor_total_bruto * (1 - COALESCE(r.percentual_desconto, 0) / 100)) > 0
@@ -40,18 +43,19 @@ ORDER BY receita_diarias DESC;
 -- Janela: de hoje até hoje + 7, inclusive nos dois extremos.
 -- Resultado esperado (1 linha):
 --   reserva 12 | Carlos Eduardo Menezes | quarto 201 | Superior | entrada hoje + 5 | 3 noites
--- Ficam de fora: a reserva 11 (CONFIRMADA, entrada hoje + 10, depois da janela) e as
---   reservas 13 a 16 (CANCELADAS, entradas em hoje + 7, + 6, + 2 e + 1, dentro da janela).
+-- Ficam de fora:
+--   a reserva 11 (CONFIRMADA, entrada hoje + 10, depois da janela) e as reservas 13 a 16
+--   (CANCELADAS, entradas em hoje + 7, + 6, + 2 e + 1, dentro da janela).
 SELECT r.id_reserva,
        h.nome_completo,
        q.numero_quarto,
        c.nome_categoria,
        r.data_entrada_prevista,
        (r.data_saida_prevista - r.data_entrada_prevista) AS noites
-FROM Reserva r
-JOIN Hospede h ON h.id_hospede = r.id_hospede
-JOIN Quarto q ON q.id_quarto = r.id_quarto
-JOIN Categoria_Quarto c ON c.id_categoria = q.id_categoria
+FROM reserva r
+JOIN hospede h ON h.id_hospede = r.id_hospede
+JOIN quarto q ON q.id_quarto = r.id_quarto
+JOIN categoria_quarto c ON c.id_categoria = q.id_categoria
 WHERE r.status_reserva = 'CONFIRMADA'
   AND r.data_entrada_prevista BETWEEN CURRENT_DATE AND CURRENT_DATE + 7
 ORDER BY r.data_entrada_prevista, q.numero_quarto;
@@ -68,16 +72,20 @@ ORDER BY r.data_entrada_prevista, q.numero_quarto;
 --   4 | Fernanda Rocha Almeida | 1200.00 | 1 estadia  (sem nenhum consumo extra)
 --   5 | Mariana Costa Ferreira |  800.00 | 1 estadia  (empate)
 --   5 | Ricardo Alves Teixeira |  800.00 | 1 estadia  (empate)
--- Luciana Prado Nogueira (400.00) fica na 7ª posição e não entra. Gabriel Santos Oliveira
---   está hospedado hoje (CHECK-IN) e não tem estadia concluída, então não aparece.
-SELECT posicao, nome_completo, total_gasto, estadias
+-- Luciana Prado Nogueira (400.00) fica na 7ª posição e não entra.
+-- Gabriel Santos Oliveira está hospedado hoje (CHECK-IN) e não tem estadia concluída,
+--   então não aparece.
+SELECT posicao,
+       nome_completo,
+       total_gasto,
+       estadias
 FROM (
     SELECT h.nome_completo,
            SUM(r.valor_final_pago) AS total_gasto,
            COUNT(*) AS estadias,
            RANK() OVER (ORDER BY SUM(r.valor_final_pago) DESC) AS posicao
-    FROM Hospede h
-    JOIN Reserva r ON r.id_hospede = h.id_hospede
+    FROM hospede h
+    JOIN reserva r ON r.id_hospede = h.id_hospede
     WHERE r.status_reserva = 'CHECK-OUT'
     GROUP BY h.id_hospede, h.nome_completo
     HAVING SUM(r.valor_final_pago) > 0
@@ -100,16 +108,19 @@ ORDER BY posicao, nome_completo;
 --   quarto 301: a reserva 13 se sobrepõe ao período, mas está CANCELADA e não bloqueia.
 -- Para ver um quarto bloqueado, use X = hoje + 6 e Y = hoje + 9: o 201 sai da lista.
 WITH periodo AS (
-    SELECT CURRENT_DATE + 8 AS x, CURRENT_DATE + 10 AS y
+    SELECT CURRENT_DATE + 8  AS x,
+           CURRENT_DATE + 10 AS y
 )
-SELECT q.numero_quarto, c.nome_categoria, q.andar
-FROM Quarto q
-JOIN Categoria_Quarto c ON c.id_categoria = q.id_categoria
+SELECT q.numero_quarto,
+       c.nome_categoria,
+       q.andar
+FROM quarto q
+JOIN categoria_quarto c ON c.id_categoria = q.id_categoria
 CROSS JOIN periodo p
-WHERE q.status_manutencao IS NOT TRUE
+WHERE NOT q.status_manutencao
   AND NOT EXISTS (
       SELECT 1
-      FROM Reserva r
+      FROM reserva r
       WHERE r.id_quarto = q.id_quarto
         AND r.status_reserva NOT IN ('CANCELADA', 'NO-SHOW')
         AND r.data_entrada_prevista < p.y
@@ -132,11 +143,14 @@ ORDER BY q.numero_quarto;
 --   9420.00 (se as estadias não cruzarem a virada do ano).
 SELECT TO_CHAR(mes, 'YYYY-MM') AS mes,
        receita_mes,
-       SUM(receita_mes) OVER (PARTITION BY EXTRACT(YEAR FROM mes) ORDER BY mes) AS receita_acumulada
+       SUM(receita_mes) OVER (
+           PARTITION BY EXTRACT(YEAR FROM mes)
+           ORDER BY mes
+       ) AS receita_acumulada
 FROM (
     SELECT DATE_TRUNC('month', r.data_saida_prevista)::date AS mes,
            SUM(r.valor_final_pago) AS receita_mes
-    FROM Reserva r
+    FROM reserva r
     WHERE r.status_reserva = 'CHECK-OUT'
     GROUP BY DATE_TRUNC('month', r.data_saida_prevista)::date
     HAVING SUM(r.valor_final_pago) > 0
