@@ -101,3 +101,20 @@ CREATE TABLE consumo_servico (
         REFERENCES servico(id_servico) ON DELETE RESTRICT,
     CONSTRAINT ck_consumo_quantidade CHECK (quantidade > 0)
 );
+
+-- PAGAMENTO: sinal, quitação do check-out e estorno (valor sempre positivo; o tipo indica o sentido).
+-- Alimentada por fazer_checkout. FK com RESTRICT: o histórico financeiro não some com a reserva.
+CREATE TABLE Pagamento (
+    id_pagamento SERIAL,
+    id_reserva INT NOT NULL,
+    tipo VARCHAR(10) NOT NULL,
+    forma VARCHAR(20) NOT NULL,
+    valor DECIMAL(10,2) NOT NULL,
+    data_hora TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_pagamento PRIMARY KEY (id_pagamento),
+    CONSTRAINT fk_pagamento_reserva FOREIGN KEY (id_reserva)
+    REFERENCES Reserva(id_reserva) ON DELETE RESTRICT,
+    CONSTRAINT ck_pagamento_tipo CHECK (tipo IN ('PAGAMENTO', 'ESTORNO')),
+    CONSTRAINT ck_pagamento_forma CHECK (forma IN ('DINHEIRO', 'PIX', 'CARTAO_CREDITO', 'CARTAO_DEBITO')),
+    CONSTRAINT ck_pagamento_valor CHECK (valor > 0)
+);

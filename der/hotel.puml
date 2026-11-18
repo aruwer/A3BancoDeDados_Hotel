@@ -6,7 +6,7 @@ skinparam monochrome true
 skinparam shadowing false
 
 ' ==========================================
-' ENTIDADES DO MODELO (Total: 7 Entidades)
+' ENTIDADES DO MODELO (Total: 8 Entidades)
 ' ==========================================
 
 entity "Hospede" as hospede {
@@ -61,6 +61,16 @@ entity "Cancelamento" as cancelamento {
   motivo_cancelamento : varchar
 }
 
+entity "Pagamento" as pagamento {
+  * id_pagamento : int <<PK>>
+  --
+  * id_reserva : int <<FK>>
+  * tipo : varchar <<CHECK: PAGAMENTO, ESTORNO>>
+  * forma : varchar <<CHECK: DINHEIRO, PIX, CARTAO_CREDITO, CARTAO_DEBITO>>
+  * valor : decimal <<CHECK: > 0>>
+  * data_hora : timestamp
+}
+
 ' Entidades para resolução do N:M
 entity "Servico" as servico {
   * id_servico : int <<PK>>
@@ -98,5 +108,8 @@ reserva "1..1" ||--o| "0..1" cancelamento : pode ter >
 ' Resolução da relação N:M (Reserva x Serviço)
 reserva "1..1" ||--o{ "0..N" consumo : engloba >
 servico "1..1" ||--o{ "0..N" consumo : é consumido em >
+
+' Uma reserva gera zero ou muitos pagamentos (sinal, quitação, estorno) / Um pagamento pertence a uma única reserva
+reserva "1..1" ||--o{ "0..N" pagamento : gera >
 
 @enduml
