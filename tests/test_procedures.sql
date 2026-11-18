@@ -1,5 +1,6 @@
 -- test_procedures.sql
 -- Testa cancelar_reserva e fazer_checkout (RN-04, RN-05, RN-08, RN-09) com valores de fronteira.
+-- fazer_checkout lança a quitação na tabela PAGAMENTO (01_ddl.sql precisa ter essa tabela).
 -- Pré-requisito: 01_ddl.sql, 02_inserts.sql e procedures/postgresql_procedures.sql carregados,
 -- com os dados de exemplo ORIGINAIS (o teste usa as reservas 1, 10, 12, 13, 17 e 18).
 -- Tudo roda numa transação desfeita no final. Se alguma procedure tivesse COMMIT/ROLLBACK, a
@@ -35,6 +36,25 @@ BEGIN
             RETURN;
         END IF;
         RAISE EXCEPTION 'FALHA: erro inesperado "%" em: %', v_msg, p_sql;
+    END;
+    RAISE EXCEPTION 'FALHA: deveria ter sido barrado: %', p_sql;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Confere o erro pelo SQLSTATE (23514 = check_violation, 23503 = foreign_key_violation):
+-- as mensagens nativas do PostgreSQL mudam com o idioma do servidor (ex.: pt_BR).
+CREATE FUNCTION pg_temp.esperar_sqlstate(p_sql TEXT, p_state TEXT) RETURNS VOID AS $$
+DECLARE v_state TEXT; v_msg TEXT;
+BEGIN
+    BEGIN
+        EXECUTE p_sql;
+    EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
+        IF v_state = p_state THEN
+            RAISE NOTICE 'OK    barrou (SQLSTATE %): %', p_state, regexp_replace(p_sql, '\s+', ' ', 'g');
+            RETURN;
+        END IF;
+        RAISE EXCEPTION 'FALHA: SQLSTATE inesperado % ("%") em: %', v_state, v_msg, p_sql;
     END;
     RAISE EXCEPTION 'FALHA: deveria ter sido barrado: %', p_sql;
 END;
@@ -99,10 +119,12 @@ BEGIN
     SELECT status_reserva, valor_final_pago, percentual_desconto, data_checkout_real INTO r
     FROM reserva WHERE id_reserva = v_id;
     PERFORM pg_temp.verifica(
-        format('check-out (%s estadias prévias, saída %s, consumo %s): final %s, desconto %s%%',
+        format('check-out (%s estadias prévias, saída %s, consumo %s): final %s, desconto %s%%, 1 PAGAMENTO lançado',
                p_prev, p_saida, p_consumo, p_final, p_desc),
         r.status_reserva = 'CHECK-OUT' AND r.valor_final_pago = p_final
-        AND r.percentual_desconto = p_desc AND r.data_checkout_real = p_saida);
+        AND r.percentual_desconto = p_desc AND r.data_checkout_real = p_saida
+        AND (SELECT COUNT(*) FROM pagamento
+             WHERE id_reserva = v_id AND tipo = 'PAGAMENTO' AND valor = p_final) = 1);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -121,6 +143,9 @@ $$ LANGUAGE plpgsql;
 -- ------------------------------ 0) procedures existem ------------------------------
 SELECT pg_temp.verifica('procedures cancelar_reserva e fazer_checkout existem',
     (SELECT COUNT(*) FROM pg_proc WHERE proname IN ('cancelar_reserva', 'fazer_checkout') AND prokind = 'p') = 2);
+
+SELECT pg_temp.verifica('tabela pagamento existe',
+    (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'pagamento') = 1);
 
 -- ------------------------------ 1) cancelar_reserva: faixas da RN-04 ------------------------------
 SELECT pg_temp.cancela_ok( 7,   0.00, 'CANCELADA');   -- 7 dias: sem multa
@@ -184,6 +209,52 @@ SELECT pg_temp.checkout_ok(10, CURRENT_DATE + TIME '11:00', 0, 540, 10);    -- 1
 SELECT pg_temp.checkout_ok(10, CURRENT_DATE + TIME '12:00:01', 0, 640, 10); -- taxa usa a diária cheia: 540 + 100
 SELECT pg_temp.checkout_ok( 5, CURRENT_DATE + TIME '11:00', 100, 670,  5);  -- desconto só nas diárias: 570 + 100
 
+-- ------------------------------ 4b) fazer_checkout: saldo com PAGAMENTO/ESTORNO já lançados (RN-09) ------------------------------
+-- Sinal de 180 já pago: saldo = 600 - 180 = 420
+DO $$
+DECLARE v_id INT; v_n INT; v_soma NUMERIC;
+BEGIN
+    v_id := pg_temp.nova_reserva(pg_temp.hospede_com(0), 7, -3, 0, 'CHECK-IN', 600);
+    INSERT INTO pagamento (id_reserva, tipo, forma, valor) VALUES (v_id, 'PAGAMENTO', 'PIX', 180);
+    PERFORM pg_temp.esperar_erro(format('CALL fazer_checkout(%s, 419.99, %L)', v_id, CURRENT_DATE + TIME '11:00'), 'HOTEL-009');
+    CALL fazer_checkout(v_id, 420, CURRENT_DATE + TIME '11:00', 'DINHEIRO');
+    SELECT COUNT(*), SUM(valor) INTO v_n, v_soma FROM pagamento WHERE id_reserva = v_id;
+    PERFORM pg_temp.verifica('sinal 180 + quitação 420: 2 lançamentos somando 600', v_n = 2 AND v_soma = 600);
+    PERFORM pg_temp.verifica('quitação lançada com a forma informada (DINHEIRO)',
+        (SELECT forma FROM pagamento WHERE id_reserva = v_id AND valor = 420) = 'DINHEIRO');
+END $$;
+
+-- Já quitada pelo sinal (600): pagar 0 é aceito e nada novo é lançado
+DO $$
+DECLARE v_id INT;
+BEGIN
+    v_id := pg_temp.nova_reserva(pg_temp.hospede_com(0), 7, -3, 0, 'CHECK-IN', 600);
+    INSERT INTO pagamento (id_reserva, tipo, forma, valor) VALUES (v_id, 'PAGAMENTO', 'PIX', 600);
+    CALL fazer_checkout(v_id, 0, CURRENT_DATE + TIME '11:00');
+    PERFORM pg_temp.verifica('reserva já quitada: check-out com 0 aceito e sem novo lançamento',
+        (SELECT status_reserva FROM reserva WHERE id_reserva = v_id) = 'CHECK-OUT'
+        AND (SELECT COUNT(*) FROM pagamento WHERE id_reserva = v_id) = 1);
+END $$;
+
+-- Estorno entra na conta: pago 700, estornado 100 => líquido 600 => saldo 0
+DO $$
+DECLARE v_id INT;
+BEGIN
+    v_id := pg_temp.nova_reserva(pg_temp.hospede_com(0), 7, -3, 0, 'CHECK-IN', 600);
+    INSERT INTO pagamento (id_reserva, tipo, forma, valor) VALUES (v_id, 'PAGAMENTO', 'PIX', 700);
+    INSERT INTO pagamento (id_reserva, tipo, forma, valor) VALUES (v_id, 'ESTORNO',   'PIX', 100);
+    CALL fazer_checkout(v_id, 0, CURRENT_DATE + TIME '11:00');
+    PERFORM pg_temp.verifica('pago 700 - estorno 100 = 600: saldo zero, check-out com 0 aceito',
+        (SELECT status_reserva FROM reserva WHERE id_reserva = v_id) = 'CHECK-OUT'
+        AND (SELECT COUNT(*) FROM pagamento WHERE id_reserva = v_id) = 2);
+END $$;
+
+-- Constraints do PAGAMENTO barram dado inválido
+SELECT pg_temp.esperar_sqlstate('INSERT INTO pagamento (id_reserva, tipo, forma, valor) VALUES (10, ''PAGAMENTO'', ''PIX'', 0)',       '23514');
+SELECT pg_temp.esperar_sqlstate('INSERT INTO pagamento (id_reserva, tipo, forma, valor) VALUES (10, ''DEPOSITO'',  ''PIX'', 10)',      '23514');
+SELECT pg_temp.esperar_sqlstate('INSERT INTO pagamento (id_reserva, tipo, forma, valor) VALUES (10, ''PAGAMENTO'', ''CHEQUE'', 10)',   '23514');
+SELECT pg_temp.esperar_sqlstate('INSERT INTO pagamento (id_reserva, tipo, forma, valor) VALUES (999999, ''PAGAMENTO'', ''PIX'', 10)',  '23503');
+
 -- ------------------------------ 5) fazer_checkout: erros ------------------------------
 SELECT pg_temp.checkout_erro(CURRENT_DATE + TIME '11:00',        599.99, 'HOTEL-009');  -- 1 centavo a menos
 SELECT pg_temp.checkout_erro(CURRENT_DATE + TIME '12:00:01',     699.99, 'HOTEL-009');  -- com taxa, 1 centavo a menos
@@ -192,6 +263,8 @@ SELECT pg_temp.checkout_erro((CURRENT_DATE - 4) + TIME '08:00',  600,    'HOTEL-
 SELECT pg_temp.esperar_erro('CALL fazer_checkout(NULL, 100)',               'HOTEL-001');
 SELECT pg_temp.esperar_erro('CALL fazer_checkout(10, NULL)',                'HOTEL-001');
 SELECT pg_temp.esperar_erro('CALL fazer_checkout(10, -1)',                  'HOTEL-001');
+SELECT pg_temp.esperar_erro('CALL fazer_checkout(10, 5000, NULL, ''CHEQUE'')', 'HOTEL-001');  -- forma inválida
+SELECT pg_temp.esperar_erro('CALL fazer_checkout(10, 5000, NULL, NULL)',        'HOTEL-001');  -- forma nula
 SELECT pg_temp.esperar_erro('CALL fazer_checkout(999999, 100)',             'HOTEL-006');
 SELECT pg_temp.esperar_erro('CALL fazer_checkout(1, 5000)',                 'HOTEL-007');  -- já CHECK-OUT
 SELECT pg_temp.esperar_erro('CALL fazer_checkout(11, 5000)',                'HOTEL-007');  -- CONFIRMADA
@@ -202,6 +275,8 @@ DO $$
 DECLARE r RECORD;
 BEGIN
     CALL fazer_checkout(10, 1315.00, CURRENT_DATE + TIME '10:00');
+    PERFORM pg_temp.verifica('reserva 10: quitação de 1315,00 lançada em PAGAMENTO (forma padrão PIX)',
+        (SELECT COUNT(*) FROM pagamento WHERE id_reserva = 10 AND tipo = 'PAGAMENTO' AND forma = 'PIX' AND valor = 1315.00) = 1);
     SELECT status_reserva, valor_final_pago, percentual_desconto INTO r FROM reserva WHERE id_reserva = 10;
     PERFORM pg_temp.verifica('reserva 10: check-out com valor exato (1315,00) aceito',
                              r.status_reserva = 'CHECK-OUT' AND r.valor_final_pago = 1315.00 AND r.percentual_desconto = 0);
@@ -215,6 +290,7 @@ DO $$
 BEGIN
     IF (SELECT COUNT(*) FROM reserva) <> 18
        OR (SELECT COUNT(*) FROM cancelamento) <> 5
+       OR (SELECT COUNT(*) FROM pagamento) <> 0
        OR (SELECT status_reserva FROM reserva WHERE id_reserva = 12) <> 'CONFIRMADA'
        OR (SELECT status_reserva FROM reserva WHERE id_reserva = 10) <> 'CHECK-IN' THEN
         RAISE EXCEPTION 'FALHA: o ROLLBACK não restaurou os dados de exemplo (alguma rotina fez COMMIT?)';

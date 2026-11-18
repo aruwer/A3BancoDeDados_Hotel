@@ -7,7 +7,7 @@
 --
 -- Conteúdo:
 --   1) cancelar_reserva(...)  procedure  RN-04 (multa por faixa de dias; NO-SHOW)   altera RESERVA e CANCELAMENTO
---   2) fazer_checkout(...)    procedure  RN-05, RN-08, RN-09 (fidelidade, late check-out, pagamento) altera RESERVA
+--   2) fazer_checkout(...)    procedure  RN-05, RN-08, RN-09 (fidelidade, late check-out, pagamento) altera RESERVA e PAGAMENTO
 --   3) trg_reserva_sobreposicao  trigger  RN-02 (anti-overbooking, vale para INSERT/UPDATE direto)
 --
 -- Códigos de erro de negócio (formato do projeto, regras.md seção 6; todos com ERRCODE 'P0001'):
@@ -19,8 +19,8 @@
 -- Um erro de negócio (RAISE EXCEPTION) desfaz tudo o que a chamada já tinha feito.
 --
 -- Limitações do modelo atual (01_ddl.sql), documentadas de propósito:
---   * Não existe tabela PAGAMENTO: o sinal de 30% (RN-10) e o estorno não são modelados; o saldo do
---     check-out é o valor final inteiro.
+--   * O sinal de 30% (RN-10) ainda não é lançado (depende de uma procedure registrar_reserva, fora
+--     deste escopo), mas fazer_checkout já desconta do saldo qualquer PAGAMENTO/ESTORNO existente.
 --   * QUARTO só tem status_manutencao (booleano): não há status OCUPADO/LIMPEZA. "Liberar o quarto"
 --     acontece porque a reserva deixa de ser ativa (CANCELADA, NO-SHOW, CHECK-OUT) e o trigger
 --     trg_reserva_sobreposicao só considera PENDENTE, CONFIRMADA e CHECK-IN como ocupando o quarto.
@@ -132,37 +132,46 @@ $$;
 --   RN-05 (fidelidade): desconto sobre as diárias conforme as estadias CHECK-OUT anteriores do
 --         hóspede: 0 a 4 -> 0%; 5 a 9 -> 5%; 10 ou mais -> 10%. A taxa de late check-out usa a
 --         diária cheia (sem desconto).
---   RN-09 (pagamento): só finaliza se o valor entregue cobrir o valor final (HOTEL-009).
+--   RN-09 (pagamento): saldo = valor final - (PAGAMENTOs - ESTORNOs já lançados). O valor entregue
+--         precisa cobrir o saldo (HOTEL-009); a procedure lança um PAGAMENTO do valor do saldo
+--         (troco é assunto do caixa). Se o saldo já for zero ou negativo, não lança nada.
 --   Só reserva em CHECK-IN pode fazer check-out (HOTEL-007).
 --
 --   Valor final = ROUND(valor_total_bruto * (1 - desconto/100) + soma dos consumos + taxa, 2).
---   Troco é assunto do caixa: grava-se o valor final, não o valor entregue.
 --
--- Altera RESERVA (status CHECK-OUT, data_checkout_real, percentual_desconto, valor_final_pago) e
--- LÊ CONSUMO_SERVICO e as estadias do hóspede para recalcular o total. (O modelo atual não tem
--- PAGAMENTO nem status de quarto, então esta procedure grava em uma única tabela; ver o cabeçalho.)
+-- Altera DUAS tabelas na mesma chamada: RESERVA (status CHECK-OUT, data_checkout_real,
+-- percentual_desconto, valor_final_pago recalculado) e PAGAMENTO (lança a quitação). Lê
+-- CONSUMO_SERVICO e as estadias do hóspede para recalcular o total.
 --
 -- Concorrência: lê a reserva com FOR UPDATE; dois check-outs simultâneos da mesma reserva são
--- serializados e o segundo recebe HOTEL-007.
+-- serializados e o segundo recebe HOTEL-007 (nunca grava duas quitações).
 --
--- Parâmetros: p_data_hora_saida nulo = agora (permite testar 12:00:00, 12:00:01, 18:00:00...).
+-- Parâmetros: p_data_hora_saida nulo = agora (permite testar 12:00:00, 12:00:01, 18:00:00...);
+--             p_forma_pagamento: DINHEIRO, PIX, CARTAO_CREDITO ou CARTAO_DEBITO (padrão PIX).
 -- Não faz COMMIT/ROLLBACK.
 -- ---------------------------------------------------------------------------------------------
+-- A assinatura ganhou o parâmetro p_forma_pagamento: remove a versão antiga (3 parâmetros) para não
+-- deixar uma sobrecarga que tornaria a chamada com 3 argumentos ambígua.
+DROP PROCEDURE IF EXISTS fazer_checkout(INTEGER, NUMERIC, TIMESTAMP);
+
 CREATE OR REPLACE PROCEDURE fazer_checkout(
     p_id_reserva      INTEGER,
     p_valor_pago      NUMERIC,
-    p_data_hora_saida TIMESTAMP DEFAULT NULL)
+    p_data_hora_saida TIMESTAMP DEFAULT NULL,
+    p_forma_pagamento VARCHAR   DEFAULT 'PIX')
 LANGUAGE plpgsql AS $$
 DECLARE
-    v_saida     TIMESTAMP := COALESCE(p_data_hora_saida, LOCALTIMESTAMP);
-    v_res       RECORD;
-    v_noites    INTEGER;
-    v_diaria    NUMERIC;
-    v_estadias  INTEGER;
-    v_desconto  NUMERIC;
-    v_consumos  NUMERIC;
-    v_taxa      NUMERIC;
-    v_final     NUMERIC(10,2);
+    v_saida      TIMESTAMP := COALESCE(p_data_hora_saida, LOCALTIMESTAMP);
+    v_res        RECORD;
+    v_noites     INTEGER;
+    v_diaria     NUMERIC;
+    v_estadias   INTEGER;
+    v_desconto   NUMERIC;
+    v_consumos   NUMERIC;
+    v_taxa       NUMERIC;
+    v_final      NUMERIC(10,2);
+    v_ja_pago    NUMERIC;
+    v_saldo      NUMERIC(10,2);
 BEGIN
     IF p_id_reserva IS NULL THEN
         RAISE EXCEPTION 'HOTEL-001: o id da reserva é obrigatório' USING ERRCODE = 'P0001';
@@ -170,6 +179,11 @@ BEGIN
     IF p_valor_pago IS NULL OR p_valor_pago < 0 THEN
         RAISE EXCEPTION 'HOTEL-001: o valor pago deve ser informado e não pode ser negativo'
             USING ERRCODE = 'P0001';
+    END IF;
+    IF p_forma_pagamento IS NULL
+       OR p_forma_pagamento NOT IN ('DINHEIRO', 'PIX', 'CARTAO_CREDITO', 'CARTAO_DEBITO') THEN
+        RAISE EXCEPTION 'HOTEL-001: forma de pagamento inválida (%): use DINHEIRO, PIX, CARTAO_CREDITO ou CARTAO_DEBITO',
+            p_forma_pagamento USING ERRCODE = 'P0001';
     END IF;
 
     -- Trava a linha da reserva: serializa check-outs concorrentes da mesma reserva.
@@ -228,18 +242,31 @@ BEGIN
 
     v_final := ROUND(v_res.valor_total_bruto * (1 - v_desconto / 100.0) + v_consumos + v_taxa, 2);
 
-    -- RN-09: o pagamento precisa cobrir o valor final.
-    IF p_valor_pago < v_final THEN
-        RAISE EXCEPTION 'HOTEL-009: pagamento insuficiente: valor final % e valor pago %',
-            v_final, p_valor_pago USING ERRCODE = 'P0001';
+    -- RN-09: saldo = valor final - (pagamentos - estornos já lançados).
+    SELECT COALESCE(SUM(CASE tipo WHEN 'PAGAMENTO' THEN valor ELSE -valor END), 0) INTO v_ja_pago
+    FROM pagamento
+    WHERE id_reserva = p_id_reserva;
+
+    v_saldo := v_final - v_ja_pago;
+
+    IF p_valor_pago < GREATEST(v_saldo, 0) THEN
+        RAISE EXCEPTION 'HOTEL-009: pagamento insuficiente: saldo % (valor final %, já pago %) e valor pago %',
+            v_saldo, v_final, v_ja_pago, p_valor_pago USING ERRCODE = 'P0001';
     END IF;
 
+    -- Tabela 1: finaliza a reserva e grava o total recalculado.
     UPDATE reserva
        SET status_reserva      = 'CHECK-OUT',
            data_checkout_real  = v_saida,
            percentual_desconto = v_desconto,
            valor_final_pago    = v_final
      WHERE id_reserva = p_id_reserva;
+
+    -- Tabela 2: lança a quitação do saldo (troco não é lançado). Saldo zerado: nada a lançar.
+    IF v_saldo > 0 THEN
+        INSERT INTO pagamento (id_reserva, tipo, forma, valor)
+        VALUES (p_id_reserva, 'PAGAMENTO', p_forma_pagamento, v_saldo);
+    END IF;
 END;
 $$;
 
