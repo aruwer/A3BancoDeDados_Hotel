@@ -21,7 +21,7 @@
 --   F3 (NOT EXISTS): o quarto 302 (ativo) e o quarto 103 (em manutenção) não têm nenhuma reserva.
 --
 -- Totais gastos (diárias + consumos) das reservas CHECK-OUT, para conferir o ranking:
---  João Pedro 2420,00 | Carlos Eduardo 2250,00 | Ana Beatriz 1550,00 | Fernanda 1200,00 | Mariana 800,00 = Ricardo 800,00 | Luciana 400,00
+--   Diego 2420,00 | Bruno 2250,00 | Ana 1550,00 | Carla 1200,00 | Elisa 800,00 = Fábio 800,00 | Gabriela 400,00
 
 BEGIN;
 
