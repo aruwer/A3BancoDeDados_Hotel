@@ -1,35 +1,60 @@
-﻿services:
+# Hotel Host — PostgreSQL 17 (+ testes e aplicação, quando existirem).
+#
+#   docker compose up -d --wait                         # banco pronto, com esquema, dados, procedures e índices
+#   docker compose run --rm testes                      # verificação automatizada (pytest)         [a criar]
+#   docker compose run --rm app                         # aplicação (psycopg)                        [a criar]
+#   docker compose down -v                              # apaga os dados: a próxima subida recarrega os scripts
+#
+# Os scripts de /docker-entrypoint-initdb.d só rodam na PRIMEIRA subida de um volume novo.
+# Mudou um .sql? Rode `docker compose down -v` e suba de novo.
+# Porta 5432 ocupada? PG_PORT=5433 docker compose up -d --wait
+# As senhas abaixo são de LABORATÓRIO (nunca use em produção).
+
+services:
   postgres:
-    image: postgres:17-alpine
-    container_name: hotelhost-postgres
-    restart: unless-stopped
-    ports:
-      - "5432:5432"
+    image: postgres:17
     environment:
-      POSTGRES_DB: hotel
       POSTGRES_USER: hotel
-      POSTGRES_PASSWORD: hotel_dev_password
+      POSTGRES_PASSWORD: hotel_lab_pwd
+      POSTGRES_DB: hotel
+    ports: ["${PG_PORT:-5432}:5432"]
+    volumes:
+      - pg_dados:/var/lib/postgresql/data
+      - ./postgresql:/scripts/postgresql:ro
+      - ./procedures:/scripts/procedures:ro
+      - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/00-init.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hotel -d hotel"]
+      # -h 127.0.0.1: durante a carga dos scripts o servidor temporário só escuta no socket local;
+      # testando por TCP, o --wait só libera quando o banco DEFINITIVO está pronto (depois da carga).
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U hotel -d hotel"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
       start_period: 10s
 
-  oracle:
-    image: gvenzl/oracle-xe:21-slim
-    container_name: hotelhost-oracle
-    restart: unless-stopped
-    ports:
-      - "1521:1521"
-    environment:
-      ORACLE_PASSWORD: hotel_sys_password
-      APP_USER: hotel
-      APP_USER_PASSWORD: hotel_dev_password
-      ORACLE_DATABASE: XEPDB1
-    healthcheck:
-      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s hotel/hotel_dev_password@//localhost:1521/XEPDB1 | grep -q 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 40
-      start_period: 60s
+  # --- Descomente quando tests/ e python/ existirem -----------------------------------------------
+  # testes:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.python
+  #   profiles: ["testes"]
+  #   depends_on:
+  #     postgres: {condition: service_healthy}
+  #   volumes: [".:/app"]
+  #   environment: &conexao
+  #     PG_DSN: host=postgres port=5432 dbname=hotel user=hotel password=hotel_lab_pwd
+  #   command: ["pytest", "-q", "tests"]
+  #
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.python
+  #   profiles: ["apps"]
+  #   depends_on:
+  #     postgres: {condition: service_healthy}
+  #   volumes: [".:/app"]
+  #   environment: *conexao
+  #   command: ["python", "python/main.py"]
+
+volumes:
+  pg_dados:
