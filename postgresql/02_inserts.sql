@@ -188,21 +188,58 @@ INSERT INTO consumo_servico (id_consumo, id_reserva, id_servico, quantidade,
     (11, 10, 1, 2, CURRENT_DATE -  1 + TIME '08:00',  70.00),
     (12, 10, 3, 1, CURRENT_DATE -  1 + TIME '18:00',  45.00);
 
--- 8) Alinha as sequências SERIAL com os ids inseridos explicitamente
-SELECT setval(pg_get_serial_sequence('categoria_quarto', 'id_categoria'),
-              (SELECT MAX(id_categoria) FROM categoria_quarto));
-SELECT setval(pg_get_serial_sequence('quarto', 'id_quarto'),
-              (SELECT MAX(id_quarto) FROM quarto));
-SELECT setval(pg_get_serial_sequence('hospede', 'id_hospede'),
-              (SELECT MAX(id_hospede) FROM hospede));
-SELECT setval(pg_get_serial_sequence('servico', 'id_servico'),
-              (SELECT MAX(id_servico) FROM servico));
-SELECT setval(pg_get_serial_sequence('reserva', 'id_reserva'),
-              (SELECT MAX(id_reserva) FROM reserva));
-SELECT setval(pg_get_serial_sequence('cancelamento', 'id_cancelamento'),
-              (SELECT MAX(id_cancelamento) FROM cancelamento));
-SELECT setval(pg_get_serial_sequence('consumo_servico', 'id_consumo'),
-              (SELECT MAX(id_consumo) FROM consumo_servico));
+-- 8) Pagamentos (valor sempre positivo; o tipo indica o sentido: PAGAMENTO ou ESTORNO)
+-- Todo sinal é de exatamente 30% das diárias (limite da RN-10). A reserva 18 (PENDENTE) fica
+-- sem nenhum pagamento, porque o sinal ainda não foi pago.
+--   Estadias concluídas: sinal + quitação no check-out = valor_final_pago.
+--   Cancelamentos e no-show: pagamentos - estornos = multa aplicada.
+--     reserva 13: multa 0      => estorno de todo o sinal (450)
+--     reserva 14: multa 150    => estorno de 30 (sinal 180 - multa 150)
+--     reserva 15: multa 100    => estorno de 20 (sinal 120 - multa 100)
+--     reserva 16: multa 200    => sinal 120 + cobrança de 80 (a multa passa do sinal)
+--     reserva 17: multa 200    => sinal 120 + cobrança de 80 (no-show)
+INSERT INTO Pagamento (id_pagamento, id_reserva, tipo, forma, valor, data_hora) VALUES
+    ( 1,  1, 'PAGAMENTO', 'PIX',            270.00, CURRENT_TIMESTAMP - INTERVAL '50 days'),
+    ( 2,  1, 'PAGAMENTO', 'CARTAO_CREDITO', 810.00, CURRENT_DATE - 37 + TIME '11:00'),
+    ( 3,  2, 'PAGAMENTO', 'DINHEIRO',       120.00, CURRENT_TIMESTAMP - INTERVAL '30 days'),
+    ( 4,  2, 'PAGAMENTO', 'PIX',            350.00, CURRENT_DATE - 18 + TIME '11:00'),
+    ( 5,  3, 'PAGAMENTO', 'CARTAO_CREDITO', 450.00, CURRENT_TIMESTAMP - INTERVAL '40 days'),
+    ( 6,  3, 'PAGAMENTO', 'PIX',           1200.00, CURRENT_DATE - 27 + TIME '11:00'),
+    ( 7,  4, 'PAGAMENTO', 'PIX',            600.00, CURRENT_TIMESTAMP - INTERVAL '70 days'),
+    ( 8,  4, 'PAGAMENTO', 'CARTAO_CREDITO', 1820.00, CURRENT_DATE - 56 + TIME '11:00'),
+    ( 9,  5, 'PAGAMENTO', 'PIX',            180.00, CURRENT_TIMESTAMP - INTERVAL '25 days'),
+    (10,  5, 'PAGAMENTO', 'CARTAO_DEBITO',  420.00, CURRENT_DATE - 12 + TIME '11:00'),
+    (11,  6, 'PAGAMENTO', 'CARTAO_CREDITO', 360.00, CURRENT_TIMESTAMP - INTERVAL '35 days'),
+    (12,  6, 'PAGAMENTO', 'CARTAO_CREDITO', 840.00, CURRENT_DATE - 21 + TIME '11:00'),
+    (13,  7, 'PAGAMENTO', 'DINHEIRO',       180.00, CURRENT_TIMESTAMP - INTERVAL '20 days'),
+    (14,  7, 'PAGAMENTO', 'PIX',            620.00, CURRENT_DATE -  7 + TIME '11:00'),
+    (15,  8, 'PAGAMENTO', 'PIX',            180.00, CURRENT_TIMESTAMP - INTERVAL '22 days'),
+    (16,  8, 'PAGAMENTO', 'CARTAO_DEBITO',  620.00, CURRENT_DATE - 10 + TIME '11:00'),
+    (17,  9, 'PAGAMENTO', 'PIX',            120.00, CURRENT_TIMESTAMP - INTERVAL '16 days'),
+    (18,  9, 'PAGAMENTO', 'DINHEIRO',       280.00, CURRENT_DATE -  4 + TIME '11:00'),
+    (19, 10, 'PAGAMENTO', 'CARTAO_CREDITO', 360.00, CURRENT_TIMESTAMP - INTERVAL '12 days'),
+    (20, 11, 'PAGAMENTO', 'PIX',            180.00, CURRENT_TIMESTAMP - INTERVAL '5 days'),
+    (21, 12, 'PAGAMENTO', 'CARTAO_CREDITO', 270.00, CURRENT_TIMESTAMP - INTERVAL '4 days'),
+    (22, 13, 'PAGAMENTO', 'PIX',            450.00, CURRENT_TIMESTAMP - INTERVAL '10 days'),
+    (23, 13, 'ESTORNO',   'PIX',            450.00, CURRENT_TIMESTAMP),
+    (24, 14, 'PAGAMENTO', 'PIX',            180.00, CURRENT_TIMESTAMP - INTERVAL '9 days'),
+    (25, 14, 'ESTORNO',   'PIX',             30.00, CURRENT_TIMESTAMP),
+    (26, 15, 'PAGAMENTO', 'PIX',            120.00, CURRENT_TIMESTAMP - INTERVAL '8 days'),
+    (27, 15, 'ESTORNO',   'PIX',             20.00, CURRENT_TIMESTAMP),
+    (28, 16, 'PAGAMENTO', 'PIX',            120.00, CURRENT_TIMESTAMP - INTERVAL '7 days'),
+    (29, 16, 'PAGAMENTO', 'CARTAO_CREDITO',  80.00, CURRENT_TIMESTAMP),
+    (30, 17, 'PAGAMENTO', 'CARTAO_CREDITO', 120.00, CURRENT_TIMESTAMP - INTERVAL '10 days'),
+    (31, 17, 'PAGAMENTO', 'CARTAO_CREDITO',  80.00, CURRENT_TIMESTAMP);
+
+-- 9) Alinha as sequências SERIAL com os ids inseridos explicitamente
+SELECT setval(pg_get_serial_sequence('categoria_quarto', 'id_categoria'),  (SELECT MAX(id_categoria)   FROM Categoria_Quarto));
+SELECT setval(pg_get_serial_sequence('quarto',           'id_quarto'),     (SELECT MAX(id_quarto)      FROM Quarto));
+SELECT setval(pg_get_serial_sequence('hospede',          'id_hospede'),    (SELECT MAX(id_hospede)     FROM Hospede));
+SELECT setval(pg_get_serial_sequence('servico',          'id_servico'),    (SELECT MAX(id_servico)     FROM Servico));
+SELECT setval(pg_get_serial_sequence('reserva',          'id_reserva'),    (SELECT MAX(id_reserva)     FROM Reserva));
+SELECT setval(pg_get_serial_sequence('cancelamento',     'id_cancelamento'), (SELECT MAX(id_cancelamento) FROM Cancelamento));
+SELECT setval(pg_get_serial_sequence('consumo_servico',  'id_consumo'),    (SELECT MAX(id_consumo)     FROM Consumo_Servico));
+SELECT setval(pg_get_serial_sequence('pagamento',        'id_pagamento'),  (SELECT MAX(id_pagamento)   FROM Pagamento));
 
 COMMIT;
 
