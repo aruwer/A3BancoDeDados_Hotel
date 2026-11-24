@@ -1,24 +1,41 @@
 -- performance/carga_massa.sql
 -- Gera massa de dados volumosa no schema perf_test para medir planos de execução reais.
 -- Requisito: dezenas de milhares de linhas para evitar Seq Scan por tabela pequena.
--- Rodar APÓS o 01_ddl.sql (cria as tabelas no schema public).
+-- Rodar APÓS o banco estar no ar (01_ddl e 02_inserts já carregados pelo init). Rodar da raiz do repositório:
+--   docker compose cp performance/carga_massa.sql postgres:/tmp/carga_massa.sql
+--   docker compose exec postgres psql -U hotel -d hotel -v ON_ERROR_STOP=1 -f /tmp/carga_massa.sql
 -- Este script cria o schema perf_test, clona as tabelas (sem dados) e popula com generate_series.
 
 \set ON_ERROR_STOP on
 
--- 1. Criar schema de performance e clonar estrutura (sem dados, sem índices, sem constraints FK)
-CREATE SCHEMA IF NOT EXISTS perf_test;
+-- 1. Criar schema de performance e clonar estrutura (sem dados, SEM índices e SEM FK).
+-- ATENÇÃO: LIKE ... INCLUDING ALL copiaria também os índices do schema public (inclusive os 3 índices do projeto,
+-- criados pelo 04_indices.sql), e o plano "antes" já usaria índice. Por isso usamos DEFAULTS + CONSTRAINTS (CHECK e NOT NULL)
+-- e criamos só as PKs/UNIQUEs na seção 1b. Efeito colateral conhecido: os DEFAULTs SERIAL continuam apontando para as sequences do
+-- public, então esta carga avança os ids do schema public. Rode a medição por último ou recrie o volume depois (docker compose down -v).
+CREATE SCHEMA perf_test;   -- falha se já existir: para rodar de novo, recrie o volume (docker compose down -v)
 
 -- Tabelas base (dimensões) — poucas linhas, mas necessárias para FKs
-CREATE TABLE perf_test.Categoria_Quarto (LIKE public.Categoria_Quarto INCLUDING ALL);
-CREATE TABLE perf_test.Hospede (LIKE public.Hospede INCLUDING ALL);
-CREATE TABLE perf_test.Servico (LIKE public.Servico INCLUDING ALL);
+CREATE TABLE perf_test.Categoria_Quarto (LIKE public.Categoria_Quarto INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+CREATE TABLE perf_test.Hospede (LIKE public.Hospede INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+CREATE TABLE perf_test.Servico (LIKE public.Servico INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
 
 -- Tabelas de fato — muitas linhas
-CREATE TABLE perf_test.Quarto (LIKE public.Quarto INCLUDING ALL);
-CREATE TABLE perf_test.Reserva (LIKE public.Reserva INCLUDING ALL);
-CREATE TABLE perf_test.Consumo_Servico (LIKE public.Consumo_Servico INCLUDING ALL);
-CREATE TABLE perf_test.Cancelamento (LIKE public.Cancelamento INCLUDING ALL);
+CREATE TABLE perf_test.Quarto (LIKE public.Quarto INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+CREATE TABLE perf_test.Reserva (LIKE public.Reserva INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+CREATE TABLE perf_test.Consumo_Servico (LIKE public.Consumo_Servico INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+CREATE TABLE perf_test.Cancelamento (LIKE public.Cancelamento INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+
+-- 1b. Só as PKs e UNIQUEs (o schema real também tem). Nenhum dos 3 índices do projeto existe ainda.
+ALTER TABLE perf_test.Categoria_Quarto ADD CONSTRAINT pk_categoria_quarto PRIMARY KEY (id_categoria);
+ALTER TABLE perf_test.Hospede          ADD CONSTRAINT pk_hospede          PRIMARY KEY (id_hospede),
+                                       ADD CONSTRAINT uk_hospede_cpf      UNIQUE (cpf),
+                                       ADD CONSTRAINT uk_hospede_email    UNIQUE (email);
+ALTER TABLE perf_test.Servico          ADD CONSTRAINT pk_servico          PRIMARY KEY (id_servico);
+ALTER TABLE perf_test.Quarto           ADD CONSTRAINT pk_quarto           PRIMARY KEY (id_quarto);
+ALTER TABLE perf_test.Reserva          ADD CONSTRAINT pk_reserva          PRIMARY KEY (id_reserva);
+ALTER TABLE perf_test.Consumo_Servico  ADD CONSTRAINT pk_consumo_servico  PRIMARY KEY (id_consumo);
+ALTER TABLE perf_test.Cancelamento     ADD CONSTRAINT pk_cancelamento     PRIMARY KEY (id_cancelamento);
 
 -- 2. Popular dimensões (copiar do public + alguns extras)
 INSERT INTO perf_test.Categoria_Quarto SELECT * FROM public.Categoria_Quarto;
