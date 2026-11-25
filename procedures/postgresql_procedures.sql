@@ -6,7 +6,7 @@
 -- O arquivo é idempotente (CREATE OR REPLACE / DROP TRIGGER IF EXISTS).
 --
 -- Conteúdo:
---   1) cancelar_reserva(...)  procedure  RN-04 (multa por faixa de dias; NO-SHOW)   altera RESERVA e CANCELAMENTO
+--   1) cancelar_reserva(...)  procedure  RN-04 (multa por faixa de dias; NO-SHOW; estorno do sinal) altera RESERVA, CANCELAMENTO e PAGAMENTO
 --   2) fazer_checkout(...)    procedure  RN-05, RN-08, RN-09 (fidelidade, late check-out, pagamento) altera RESERVA e PAGAMENTO
 --   3) trg_reserva_sobreposicao  trigger  RN-02 (anti-overbooking, vale para INSERT/UPDATE direto)
 --
@@ -20,7 +20,8 @@
 --
 -- Limitações do modelo atual (01_ddl.sql), documentadas de propósito:
 --   * O sinal de 30% (RN-10) ainda não é lançado (depende de uma procedure registrar_reserva, fora
---     deste escopo), mas fazer_checkout já desconta do saldo qualquer PAGAMENTO/ESTORNO existente.
+--     deste escopo), mas cancelar_reserva e fazer_checkout já trabalham com qualquer PAGAMENTO/ESTORNO
+--     existente (estorno do sinal no cancelamento; desconto do saldo no check-out).
 --   * QUARTO só tem status_manutencao (booleano): não há status OCUPADO/LIMPEZA. "Liberar o quarto"
 --     acontece porque a reserva deixa de ser ativa (CANCELADA, NO-SHOW, CHECK-OUT) e o trigger
 --     trg_reserva_sobreposicao só considera PENDENTE, CONFIRMADA e CHECK-IN como ocupando o quarto.
@@ -38,8 +39,15 @@
 --       entrada já passou ....... 100% da primeira diária    -> NO-SHOW (hóspede não apareceu)
 --   Primeira diária D = valor_total_bruto / número de noites, arredondada a 2 casas.
 --
--- Altera DUAS tabelas na mesma chamada: RESERVA (status) e CANCELAMENTO (lança a multa; a reserva
--- cancelada deixa de ocupar o quarto para o trigger de sobreposição).
+-- Sinal e estorno (regras.md 4.1, RN-10): sinal pago = PAGAMENTOs - ESTORNOs já lançados da reserva.
+--       estorno      = maior valor entre (sinal pago - multa) e 0  -> lançado em PAGAMENTO (tipo ESTORNO,
+--                      na mesma forma do último PAGAMENTO da reserva; PIX se não houver nenhum)
+--       valor devido = maior valor entre (multa - sinal pago) e 0 -> gravado em CANCELAMENTO.valor_devido
+--                      (a cobrança em si está fora do escopo). Sem sinal pago, não há estorno.
+--
+-- Altera TRÊS tabelas na mesma chamada: RESERVA (status), CANCELAMENTO (multa e valor devido) e
+-- PAGAMENTO (estorno, só quando há algo a devolver). A reserva cancelada deixa de ocupar o quarto
+-- para o trigger de sobreposição.
 --
 -- Concorrência: lê a reserva com FOR UPDATE. Duas sessões cancelando a mesma reserva são
 -- serializadas: a segunda espera, enxerga o status já alterado e recebe HOTEL-007 (nunca gera
@@ -63,6 +71,10 @@ DECLARE
     v_multa  NUMERIC(10,2);
     v_status VARCHAR(20);
     v_faixa  VARCHAR(255);
+    v_pago    NUMERIC(10,2);
+    v_estorno NUMERIC(10,2);
+    v_devido  NUMERIC(10,2);
+    v_forma   VARCHAR(20);
 BEGIN
     IF p_id_reserva IS NULL THEN
         RAISE EXCEPTION 'HOTEL-001: o id da reserva é obrigatório' USING ERRCODE = 'P0001';
@@ -113,9 +125,30 @@ BEGIN
     -- Tabela 1: muda o status da reserva (libera o quarto para novas reservas).
     UPDATE reserva SET status_reserva = v_status WHERE id_reserva = p_id_reserva;
 
-    -- Tabela 2: lança a multa.
-    INSERT INTO cancelamento (id_reserva, taxa_multa_aplicada, motivo_cancelamento)
-    VALUES (p_id_reserva, v_multa, COALESCE(p_motivo, v_faixa));
+    -- Sinal efetivamente em poder do hotel: pagamentos - estornos já lançados.
+    SELECT COALESCE(SUM(CASE tipo WHEN 'PAGAMENTO' THEN valor ELSE -valor END), 0)
+    INTO v_pago
+    FROM pagamento
+    WHERE id_reserva = p_id_reserva;
+
+    v_estorno := GREATEST(v_pago - v_multa, 0);   -- devolve o que sobra do sinal depois da multa
+    v_devido  := GREATEST(v_multa - v_pago, 0);   -- parte da multa que o sinal não cobriu
+
+    -- Tabela 2: lança a multa e o valor devido.
+    INSERT INTO cancelamento (id_reserva, taxa_multa_aplicada, valor_devido, motivo_cancelamento)
+    VALUES (p_id_reserva, v_multa, v_devido, COALESCE(p_motivo, v_faixa));
+
+    -- Tabela 3: devolve o sinal que sobrou (estorno na mesma forma do último pagamento).
+    IF v_estorno > 0 THEN
+        SELECT p.forma INTO v_forma
+        FROM pagamento p
+        WHERE p.id_reserva = p_id_reserva AND p.tipo = 'PAGAMENTO'
+        ORDER BY p.data_hora DESC, p.id_pagamento DESC
+        LIMIT 1;
+
+        INSERT INTO pagamento (id_reserva, tipo, forma, valor)
+        VALUES (p_id_reserva, 'ESTORNO', COALESCE(v_forma, 'PIX'), v_estorno);
+    END IF;
 END;
 $$;
 

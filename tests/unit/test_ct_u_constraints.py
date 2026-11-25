@@ -340,7 +340,7 @@ def test_ct_u27_colunas_de_dinheiro_sao_numeric_10_2(conn):
     Then as colunas monetárias são numeric(10,2)"""
     colunas = [("reserva", "valor_total_bruto"), ("reserva", "valor_final_pago"),
                ("categoria_quarto", "valor_diaria_base"), ("servico", "valor_unitario"),
-               ("consumo_servico", "valor_total_item"), ("cancelamento", "taxa_multa_aplicada"),
+               ("consumo_servico", "valor_total_item"), ("cancelamento", "taxa_multa_aplicada"), ("cancelamento", "valor_devido"),
                ("pagamento", "valor")]
     for tabela, coluna in colunas:
         tipo = um(conn, "SELECT data_type, numeric_precision, numeric_scale FROM information_schema.columns "

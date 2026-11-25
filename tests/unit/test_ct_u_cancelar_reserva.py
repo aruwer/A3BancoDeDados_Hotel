@@ -144,3 +144,71 @@ def test_ct_u50_data_padrao_e_hoje_do_banco(conn):
     assert (um(conn, "SELECT data_entrada_prevista - CURRENT_DATE FROM reserva WHERE id_reserva=12")[0]) == 5
     conn.execute("CALL cancelar_reserva(12)")
     assert _multa(conn, 12) == [Decimal("150.00")]
+
+
+def _com_sinal(conn, valor, **kwargs):
+    """Reserva CONFIRMADA de 3 noites (bruto R$ 600,00, D = 200,00) com um PAGAMENTO de sinal."""
+    rid, entrada = reserva_confirmada_futura(conn, **kwargs)
+    if valor:
+        conn.execute("INSERT INTO pagamento (id_reserva, tipo, forma, valor) VALUES (%s,'PAGAMENTO','CARTAO_CREDITO',%s)",
+                     (rid, valor))
+    return rid, entrada
+
+
+def _estornos(conn, rid):
+    return [l[0] for l in todos(conn, "SELECT valor FROM pagamento WHERE id_reserva=%s AND tipo='ESTORNO' ORDER BY id_pagamento", (rid,))]
+
+
+@pytest.mark.parametrize("dias,estorno", [
+    (7, "180.00"),
+    (6, "80.00"),
+    (1, None),
+    (-1, None),
+])
+def test_ct_u61_estorno_do_sinal_tabela_4_1(conn, dias, estorno):
+    """Given uma reserva de 3 noites com D = R$ 200,00 e sinal pago de R$ 180,00
+    When cancelo com N dias de antecedência
+    Then o estorno lançado é o maior valor entre (sinal - multa) e 0 (sem linha quando for 0)"""
+    rid, entrada = _com_sinal(conn, Decimal("180.00"))
+    _cancelar(conn, rid, entrada, dias)
+    assert _estornos(conn, rid) == ([Decimal(estorno)] if estorno else [])
+
+
+def test_ct_u61_estorno_usa_a_forma_do_sinal_e_fecha_o_saldo(conn):
+    """Given a reserva 12 (sinal de R$ 270,00 em CARTAO_CREDITO, multa de R$ 150,00)
+    When cancelo a reserva
+    Then o ESTORNO de R$ 120,00 usa a mesma forma e pagamentos - estornos = multa"""
+    forma = um(conn, "SELECT forma FROM pagamento WHERE id_reserva=12 AND tipo='PAGAMENTO'")[0]
+    conn.execute("CALL cancelar_reserva(12)")
+    assert um(conn, "SELECT tipo, forma, valor FROM pagamento WHERE id_reserva=12 AND tipo='ESTORNO'") == ("ESTORNO", forma, Decimal("120.00"))
+    liquido = um(conn, "SELECT SUM(CASE tipo WHEN 'PAGAMENTO' THEN valor ELSE -valor END) FROM pagamento WHERE id_reserva=12")[0]
+    assert liquido == Decimal("150.00")
+
+
+def test_ct_u61_sem_sinal_nao_gera_estorno(conn):
+    """Given a reserva 18 (PENDENTE, sem nenhum pagamento)
+    When cancelo a reserva
+    Then nenhum ESTORNO é lançado e nada fica devido"""
+    conn.execute("CALL cancelar_reserva(18)")
+    assert um(conn, "SELECT count(*) FROM pagamento WHERE id_reserva=18")[0] == 0
+    assert um(conn, "SELECT valor_devido FROM cancelamento WHERE id_reserva=18")[0] == Decimal("0.00")
+
+
+@pytest.mark.parametrize("dias,devido", [(7, "0.00"), (6, "0.00"), (1, "20.00"), (-1, "20.00")])
+def test_ct_u62_valor_devido_quando_a_multa_passa_do_sinal(conn, dias, devido):
+    """Given D = R$ 200,00 e sinal de R$ 180,00
+    When cancelo com N dias de antecedência
+    Then valor_devido = maior valor entre (multa - sinal) e 0, consultável em cancelamento"""
+    rid, entrada = _com_sinal(conn, Decimal("180.00"))
+    _cancelar(conn, rid, entrada, dias)
+    assert um(conn, "SELECT valor_devido FROM cancelamento WHERE id_reserva=%s", (rid,))[0] == Decimal(devido)
+
+
+def test_ct_u62_sem_sinal_a_multa_inteira_fica_devida(conn):
+    """Given uma reserva sem sinal e D = R$ 200,00
+    When cancelo com 1 dia de antecedência
+    Then valor_devido = R$ 200,00 e não há ESTORNO"""
+    rid, entrada = _com_sinal(conn, None)
+    _cancelar(conn, rid, entrada, 1)
+    assert um(conn, "SELECT valor_devido FROM cancelamento WHERE id_reserva=%s", (rid,))[0] == Decimal("200.00")
+    assert _estornos(conn, rid) == []

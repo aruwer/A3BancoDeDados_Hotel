@@ -570,7 +570,7 @@ Scenario: Reservar o mesmo período depois do cancelamento
   Then a reserva é aceita
 ```
 
-**CT-U61 · Estorno do sinal (tabela 4.1)** · LACUNA
+**CT-U61 · Estorno do sinal (tabela 4.1)** · IMPL
 ```gherkin
 Scenario Outline: Estorno = maior valor entre (sinal - multa) e 0
   Given uma reserva de 3 noites com D = R$ 200,00 e sinal pago de R$ 180,00
@@ -583,9 +583,9 @@ Scenario Outline: Estorno = maior valor entre (sinal - multa) e 0
     | 1    | 200,00 | 0,00    |
     | -1   | 200,00 | 0,00    |
 ```
-Hoje `cancelar_reserva` só grava a multa; o estorno do `02_inserts.sql` é inserido à mão. A procedure deveria lançar o ESTORNO em `pagamento`.
+`cancelar_reserva` lança o ESTORNO em `pagamento` (e o valor devido em `cancelamento.valor_devido`).
 
-**CT-U62 · Valor devido quando a multa passa do sinal** · LACUNA, a multa de R$ 200,00 com sinal de R$ 180,00 deixa R$ 20,00 devidos, registrados de forma consultável (o `regras.md` seção 4.1 exige "valor devido").
+**CT-U62 · Valor devido quando a multa passa do sinal** · IMPL, a multa de R$ 200,00 com sinal de R$ 180,00 deixa R$ 20,00 devidos, registrados de forma consultável (o `regras.md` seção 4.1 exige "valor devido").
 
 **CT-U63 · Cancelamento não faz COMMIT nem ROLLBACK** · IMPL, ver CT-U154.
 

@@ -58,6 +58,7 @@ entity "Cancelamento" as cancelamento {
   * id_reserva : int <<FK, UNIQUE>>
   * data_cancelamento : timestamp
   * taxa_multa_aplicada : decimal
+  * valor_devido : decimal
   motivo_cancelamento : varchar
 }
 

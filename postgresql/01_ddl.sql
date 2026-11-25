@@ -70,12 +70,14 @@ CREATE TABLE cancelamento (
     id_reserva           INT           NOT NULL,
     data_cancelamento    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
     taxa_multa_aplicada  DECIMAL(10,2) NOT NULL,
+    valor_devido         DECIMAL(10,2) NOT NULL DEFAULT 0,   -- parte da multa que o sinal não cobriu (regras.md 4.1)
     motivo_cancelamento  VARCHAR(255),
     CONSTRAINT pk_cancelamento PRIMARY KEY (id_cancelamento),
     CONSTRAINT uk_cancelamento_reserva UNIQUE (id_reserva),
     CONSTRAINT fk_cancelamento_reserva FOREIGN KEY (id_reserva)
         REFERENCES reserva(id_reserva) ON DELETE CASCADE,
-    CONSTRAINT ck_cancelamento_taxa CHECK (taxa_multa_aplicada >= 0)
+    CONSTRAINT ck_cancelamento_taxa CHECK (taxa_multa_aplicada >= 0),
+    CONSTRAINT ck_cancelamento_devido CHECK (valor_devido >= 0)
 );
 
 -- RESOLUÇÃO N:M (Reserva x Serviços Consumidos)
