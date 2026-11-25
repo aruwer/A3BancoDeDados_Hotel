@@ -1587,3 +1587,21 @@ Ensaiar em rodízio: cada pessoa explica um trecho que não escreveu.
 1. Decidir, regra por regra, entre implementar e cortar as lacunas 1 a 8 (CT-M13).
 2. Implementar o executor de testes do serviço `testes` (lacuna 11), automatizando primeiro os CTs IMPL.
 3. Registrar este trabalho no `docs/ia-log.md` e na seção 7 do README (CT-M33), com os erros que a IA cometer na escrita dos testes.
+
+---
+
+## 9. Implementação dos CT-U (status)
+
+Os CT-U com status IMPL e PARCIAL (parte implementada) estão codificados em `tests/unit/` (pytest + psycopg; `PG_DSN` define a conexão). Cada teste roda numa transação desfeita no final. O nome de cada função leva o código do CT (`test_ct_u50_...`).
+
+| Arquivo | CTs |
+|---|---|
+| `test_ct_u_constraints.py` | CT-U01, U02, U04 a U23, U25 a U28 |
+| `test_ct_u_trigger_sobreposicao.py` | CT-U30 a U37 |
+| `test_ct_u_cancelar_reserva.py` | CT-U50 a U60 |
+| `test_ct_u_fazer_checkout.py` | CT-U70 a U76, U100 a U106, U110 a U115 |
+| `test_ct_u_contrato_procedures.py` | CT-U150, U152 a U155 e dois CTs novos: **CT-U156** (pagamentos menos estornos = valor final ou multa, nos dados de exemplo) e **CT-U157** (valor final do exemplo = bruto + consumos) |
+| `test_ct_u_consultas.py` | CT-U170 a U179, U180, U181 |
+| `test_ct_u_indices.py` | CT-U190, U192 |
+
+Resultado atual: 178 passam e 2 falham de propósito (`xfail` estrito, BUG-01 e BUG-02), descritos em `relatorio-problemas.md`. Fora desta etapa ficam: os CT-U com status LACUNA, o CT-U03 (31 noites; a constraint do máximo não existe), o CT-U24 (decisão sobre `ON DELETE`), o CT-U29 (manual), o CT-U151 e o CT-U191/U193/U194 (dependem de decisão ou de massa de dados) e os grupos CT-I, CT-A, CT-R e CT-M.
