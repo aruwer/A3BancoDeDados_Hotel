@@ -1,14 +1,14 @@
-# Hotel Host — PostgreSQL 17 (+ testes e aplicação, quando existirem).
+# Hotel Host — PostgreSQL 17 (+ testes e aplicação).
 #
 #   docker compose up -d --wait                         # banco pronto, com esquema, dados, procedures e índices
-#   docker compose run --rm testes                      # verificação automatizada (pytest)         [a criar]
-#   docker compose run --rm app                         # aplicação (psycopg)                        [a criar]
+#   docker compose run --rm testes                      # verificação automatizada (pytest)
+#   docker compose run --rm app                         # aplicação (psycopg)
 #   docker compose down -v                              # apaga os dados: a próxima subida recarrega os scripts
 #
 # Os scripts de /docker-entrypoint-initdb.d só rodam na PRIMEIRA subida de um volume novo.
 # Mudou um .sql? Rode `docker compose down -v` e suba de novo.
 # Porta 5432 ocupada? PG_PORT=5433 docker compose up -d --wait
-# As senhas abaixo são de LABORATÓRIO (nunca use em produção).
+# ATENÇÃO: As credenciais e senhas abaixo são EXCLUSIVAS de laboratório local (nunca use em produção).
 
 services:
   postgres:
@@ -24,37 +24,34 @@ services:
       - ./procedures:/scripts/procedures:ro
       - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/00-init.sh:ro
     healthcheck:
-      # -h 127.0.0.1: durante a carga dos scripts o servidor temporário só escuta no socket local;
-      # testando por TCP, o --wait só libera quando o banco DEFINITIVO está pronto (depois da carga).
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U hotel -d hotel"]
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 10s
 
-  # --- Descomente quando tests/ e python/ existirem -----------------------------------------------
-  # testes:
-  #   build:
-  #     context: .
-  #     dockerfile: docker/Dockerfile.python
-  #   profiles: ["testes"]
-  #   depends_on:
-  #     postgres: {condition: service_healthy}
-  #   volumes: [".:/app"]
-  #   environment: &conexao
-  #     PG_DSN: host=postgres port=5432 dbname=hotel user=hotel password=hotel_lab_pwd
-  #   command: ["pytest", "-q", "tests"]
-  #
-  # app:
-  #   build:
-  #     context: .
-  #     dockerfile: docker/Dockerfile.python
-  #   profiles: ["apps"]
-  #   depends_on:
-  #     postgres: {condition: service_healthy}
-  #   volumes: [".:/app"]
-  #   environment: *conexao
-  #   command: ["python", "python/main.py"]
+  testes:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python
+    profiles: ["testes"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    volumes: [".:/app"]
+    environment: &conexao
+      PG_DSN: host=postgres port=5432 dbname=hotel user=hotel password=hotel_lab_pwd
+    command: ["pytest", "-q", "tests"]
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python
+    profiles: ["apps"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    volumes: [".:/app"]
+    environment: *conexao
+    command: ["python", "python/main.py"]
 
 volumes:
   pg_dados:
