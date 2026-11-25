@@ -29,6 +29,7 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
   - O arquivo diz ser gerado "a partir de" si mesmo (referência circular): a fonte original foi sobrescrita pela saída.
   - Os comentários `-- @Q01 · ...` com a pergunta, o objetivo e o **"Resultado esperado"** de cada consulta (existiam na versão `2ef6357`) sumiram. O próprio cabeçalho manda "comparar com os 'Resultado esperado' dos comentários de 03_consultas.sql", que não existem mais.
 - **Impacto:** o enunciado exige "cada consulta com o objetivo em um comentário" e "resultado conferido por um teste com o valor esperado calculado à mão". Hoje o valor esperado só existe nos testes novos. Na defesa oral, o professor abre o arquivo e vê SQL de máquina.
+- **Contexto no histórico:** o `docs/Log-IA-Joao` (linha 7 do resumo da conversa) diz que um gerador das 10 consultas para o pgAdmin foi criado; ele provavelmente está só na máquina de quem o escreveu e não foi commitado.
 - **Correção sugerida:** restaurar a versão com comentários (`git show 2ef6357:postgresql/03_consultas.sql`), aplicar a correção do P-01 e, se o grupo quiser o formato para pgAdmin, manter o gerador e a saída em outro caminho (por exemplo `scripts/` e `performance/`), nunca no lugar do arquivo oficial.
 - **CT:** CT-U181 (`test_ct_u181_cada_consulta_tem_objetivo_em_comentario`, marcado BUG-02).
 - **Contraprova positiva:** as outras 9 consultas (Q01 a Q07, Q09 e Q10) devolvem exatamente os valores calculados à mão (CT-U170 a CT-U179), então a lógica delas está correta. O problema é de organização e de Q08.
@@ -48,6 +49,7 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
   porque a primeira linha vira `#!/bin/sh\r`. Reproduzido com `docker compose up -d --wait postgres` em um volume novo.
 - **Impacto:** é o critério transversal da A3 ("script que não roda = zero na etapa"; "quem avalia roda `docker compose up -d --wait`"). Quem clonar no Windows não sobe o banco. Um avaliador que descompacta o zip no Windows pode cair no mesmo problema.
 - **Correção sugerida:** criar `.gitattributes` com `*.sh text eol=lf` (e, por segurança, `*.sql text eol=lf`), recomitar o script já normalizado e documentar no README. Alternativa: `command: ["sh","/scripts/..."]` não resolve o shebang, então o `.gitattributes` é o caminho certo.
+- **Contexto no histórico:** o `docs/Log-IA-Joao` (linha 7 da tabela) registra que esse mesmo erro 127 foi diagnosticado e corrigido localmente com um `.gitattributes` (`*.sh text eol=lf`). Esse arquivo **nunca chegou à `main`** (`git ls-files` não o lista), então o problema continua para quem clonar. Basta versionar o `.gitattributes` que já existe na máquina de quem o criou.
 - **CT:** CT-R14 e CT-I10 (ainda sem teste automatizado; a verificação exige o Docker real).
 - **Como foi contornado nos testes:** o banco de laboratório foi criado com `docker run postgres:17` e os scripts carregados com `psql` na ordem do `postgres-init.sh`.
 
