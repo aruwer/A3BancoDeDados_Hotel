@@ -1,0 +1,54 @@
+# Log de Uso de IA: Pessoa 2 (Hotel Host)
+
+Documento único com tudo o que foi feito com agentes de IA no trabalho da Pessoa 2 (consultas Q06 a Q10, índices, plano de execução) e no funcionamento do Docker e do pgAdmin.
+Para juntar ao `docs/ia-log.md` do grupo: copie as seções 1, 3, 4 e 5 e renumere as linhas da tabela depois das já existentes. As datas são aproximadas: ajuste se necessário.
+O registro mede transparência e senso crítico: só entra erro que de fato aconteceu. Onde aparece `<confirmar>`, o grupo precisa preencher com o que realmente ocorreu.
+
+## 1. Ferramentas e modelos
+
+| Parte do trabalho | Ferramenta | Modelo | Observação |
+|---|---|---|---|
+| Docker e pgAdmin (funcionamento do banco) | OpenCode (agente de terminal da Aula 01B) | Nemotron 3 <confirmar versão e se foi `:free` via OpenRouter, como no `opencode.json`> | Feito pelo grupo com o agente; o agente propõe, o grupo executa |
+| Revisão do repositório, regras, consultas Q06 a Q10, índices, scripts de medição, planilha de tarefas | Claude, pelo chat do claude.ai | Claude Sonnet 5.5 | Conversa de chat: o agente lê os arquivos que o grupo envia e devolve arquivos. **O ambiente do chat não tem PostgreSQL nem Docker: o Claude não executou nenhum SQL.** |
+| DER e DDL iniciais (sessão 1) | Gemini, interface web | Google Gemini 3.1 Pro | Registrado em `docs/log_AI_DER_DLL.md` |
+
+Skills do OpenCode usadas: <listar só as que o grupo usou de fato>. Configuração versionada: `opencode.json` e `AGENTS.md`.
+Dados: nenhum dado pessoal real foi enviado a nenhuma ferramenta; os dados de exemplo são fictícios.
+
+## 2. Resumo da conversa com o Claude (em ordem)
+
+1. **Divisão do trabalho (início de novembro).** O Claude dividiu as tarefas entre os 5 integrantes até a segunda-feira seguinte e gerou uma planilha de acompanhamento.
+2. **Regras de negócio (início de novembro).** Redigiu as regras do hotel com valores-limite, códigos de erro e mapa de implementação (procedures, triggers e constraints). Depois uniu esse documento com o rascunho de um colega (`README.md` e `perguntas_de_negocio.md`), numerando RN-01 a RN-12 e listando decisões em aberto.
+3. **Revisão do repositório e passagem para PostgreSQL (14/11).** Com o enunciado novo (um só SGBD), comparou o zip do grupo com a rubrica: DDL, DER, compose, `AGENTS.md`, `opencode.json`, `.gitignore`. Entregou versões ajustadas para PostgreSQL 17, incluindo um `.gitattributes` e a ideia de uma constraint de exclusão para impedir reservas sobrepostas. O grupo manteve o esquema original (`id_hospede`, `status_reserva`...), com constraints nomeadas, e adaptou consultas e índices a ele.
+4. **Trabalho da Pessoa 2 (14/11).** A partir do backlog do GitHub Projects, escreveu as consultas Q06 a Q10, o `04_indices.sql` (3 índices) e os scripts de carga de massa e de medição do `EXPLAIN (ANALYZE, BUFFERS)`. Comparou o backlog com o modelo e apontou divergências (tabela `reserva_quarto`, nomes das procedures, trigger de overbooking).
+5. **Erro de subida do contêiner (a partir de 18/11).** Diagnosticou o código de saída 127 do contêiner `postgres` como script de inicialização com quebras de linha CRLF. O funcionamento do Docker e do pgAdmin foi concluído pelo grupo com o OpenCode + Nemotron 3 (ver linha 7 da tabela).
+6. **Conferência dos resultados esperados.** Recalculou à mão (em Python, a partir do `02_inserts.sql`) os resultados esperados de Q06 a Q10, que estavam errados nos comentários, e corrigiu os scripts de carga e de medição para os nomes reais das colunas.
+7. **Scripts para o pgAdmin.** Reescreveu a medição em SQL puro e criou um gerador que reúne as 10 consultas numa grade única, porque o pgAdmin mostra só o resultado do último comando e não entende comandos do `psql`.
+
+## 3. Registros
+
+| # | Artefato | Pedido (resumo) | O que o agente errou ou omitiu | O que o grupo fez |
+|---|---|---|---|---|
+| 1 | `postgresql/01_ddl.sql` e `der/hotel.puml` | (Gemini) Criar o DER e o DDL do hotel; (Claude) revisar contra as regras e a rubrica | O Gemini gerou constraints sem nome, `ON DELETE CASCADE` em tabelas de histórico, `ON DELETE` ausente nas demais FKs, status (`CHECK-IN`, `NO-SHOW`) e um booleano de manutenção fora do padrão das regras, sem as entidades `PAGAMENTO` e `AUDITORIA_RESERVA`; o DDL nunca foi executado | Revisão com o Claude; o grupo manteve o esquema original com constraints nomeadas <confirmar as mudanças aplicadas> e executou o script no Docker <confirmar> |
+| 2 | `.gitignore`, `opencode.json`, `AGENTS.md`, `docker-compose.yml` | Configurar o agente e a infraestrutura | Arquivos salvos com BOM, `opencode.json` com chaves que o OpenCode não reconhece e compose com Oracle sem scripts de carga | Reescritos sem BOM e só com PostgreSQL |
+| 3 | `AGENTS.md`, `README.md`, `docker-compose.yml` | (Claude) Declarar SGBD e linguagem | O Claude criou a pasta `app/` e o comando `--profile apps run --rm app` sem conhecer o backlog, que define `python/` e `docker compose run --rm app` | Alinhados ao backlog |
+| 4 | `postgresql/03_consultas.sql` (Q06 a Q10) | (Claude) Rascunho de 5 consultas avançadas e seus resultados esperados | Os "Resultado esperado (calculado à mão)" do arquivo não batiam com o `02_inserts.sql`: Q06 dava Standard com 5 reservas (real: 8, com 2 canceladas, 25,0), Q07 somava 2155 (real: 1335), Q10 listava linhas NO-SHOW com 0 reservas, que o `GROUP BY` não gera, e as fronteiras citadas (exatamente 20 por cento, serviços empatados) não existem nos dados <confirmar qual agente escreveu esses valores> | Recalculados a partir dos dados e corrigidos nos comentários; as consultas Q06 a Q10 rodaram no pgAdmin, uma por vez |
+| 5 | `performance/carga_massa.sql` | Massa de 200 mil reservas no schema `perf_test` para medir os índices | Na versão do repositório, `LIKE ... INCLUDING ALL` copia os índices do `public`, inclusive os 3 índices do projeto, e o plano "antes" já usaria índice, ao contrário do que o comentário dizia <confirmar qual agente adaptou o script> | Trocado por `INCLUDING DEFAULTS INCLUDING CONSTRAINTS`, com PKs e UNIQUEs criadas explicitamente |
+| 6 | `performance/medir_antes_depois.sql` | (Claude) Script de medição do `EXPLAIN` antes e depois dos 3 índices | Dois erros. (a) Usava nomes de colunas de outro esquema (`hospede_id`, `status`), inexistentes no DDL real; não rodaria. (b) Usava comandos do `psql` (`\set`, `\pset`, `\o`, `\qecho`, `\gset`, `\i`), que o pgAdmin não entende: erro de sintaxe nas primeiras linhas (só funcionou no terminal) | (a) Reescrito com os nomes reais. (b) Reescrito em SQL puro: uma função grava cada plano em `perf_test.explain_resultados` e a última consulta devolve medianas e planos numa grade só. Resultado do novo script no pgAdmin: <confirmar> |
+| 7 | `docker/postgres-init.sh`, `docker-compose.yml`, conexão do pgAdmin | (OpenCode + Nemotron 3) Fazer o banco subir pelo Docker e conectar pelo pgAdmin <resumir o pedido feito ao agente> | O contêiner `postgres` saiu com código 127 (`cannot execute: required file not found`): o script de inicialização estava com CRLF (`#!/bin/bash^M`), porque o Git para Windows converte as quebras de linha no checkout e o repositório não tinha `.gitattributes`. <confirmar o que o Nemotron errou ou omitiu e como foi corrigido> | Script convertido para LF e `.gitattributes` com `*.sh text eol=lf`; `docker compose down -v` para recriar o volume; conexão no pgAdmin por `localhost`, porta 5432, banco `hotel` <confirmar> |
+| 8 | `postgresql/03_consultas_todas_pgadmin.sql` e `scripts/gerar_consultas_pgadmin.py` | (Claude) Rodar as 10 consultas de uma vez no pgAdmin | O Claude entregou as consultas pensando em execução por terminal; o pgAdmin mostra só a grade do último comando, então 9 resultados ficavam escondidos | Gerador que embrulha cada consulta e junta tudo numa grade única (uma linha JSON por resultado e uma linha `linhas: N` por consulta); executar e conferir com os resultados esperados <confirmar> |
+
+Tipos de artefato cobertos: DER, DDL, consultas, índices e EXPLAIN, configuração de agente, Docker e README. Erros reais com mensagem de erro: `cannot execute: required file not found` do contêiner (linha 7) e o erro de sintaxe causado pelo `\` no pgAdmin (linha 6); copie a mensagem exata do pgAdmin ao preencher.
+
+## 4. Dificuldades do grupo (não foram erros da IA)
+
+- O pgAdmin 4 mostra só a grade do último comando de um script e não aceita comandos que começam com `\`. Por isso os scripts do grupo devem ser SQL puro e devolver um único resultado final. O que for lido pela aplicação segue a mesma regra.
+- Os scripts de `docker-entrypoint-initdb.d` só rodam na primeira subida de um volume: ao mudar um `.sql` é preciso `docker compose down -v`.
+- A carga de massa avança as sequences do schema `public`; a medição deve rodar por último, ou o banco deve ser recriado depois.
+
+## 5. Reflexão do grupo (rascunho; completar no fim do projeto)
+
+- **Onde a IA mais ajudou:** revisar o repositório contra a rubrica e o enunciado, achar divergências entre o backlog e o modelo, recalcular resultados esperados a partir dos dados e gerar o esqueleto repetitivo (carga de massa, repetição das medições, gerador de consultas).
+- **Onde mais errou:** em tudo que só aparece ao executar (o DDL original nunca rodou, nomes de colunas de outro esquema, comandos do `psql` no pgAdmin, números "calculados à mão" que não batiam) e em detalhes de ambiente que o agente não via (pasta da aplicação, CRLF do Windows).
+- **O que faríamos diferente:** passar o backlog, o enunciado e o esquema real desde a primeira sessão, executar cada script no Docker logo após gerar e conferir resultados esperados com os dados antes de escrever "calculado à mão".
+- **Regra que ficou no `AGENTS.md`:** todo SQL escrito pelo agente só vale depois de executado; scripts do projeto em SQL puro, sem comandos do `psql`.
