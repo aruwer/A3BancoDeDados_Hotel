@@ -62,7 +62,7 @@ docker run --rm -v "$PWD/der:/data" plantuml/plantuml -tpng /data/hotel.puml
 | Relacionamento | Cardinalidade | Observação |
 |---|---|---|
 | Hóspede — realiza — Reserva | (1,1) — (0,N) | Toda reserva tem hóspede; hóspede cadastrado pode não ter reserva |
-| Categoria — agrupa — Quarto | (1,1) — (1,N) | Todo quarto tem categoria; o DER pede ao menos um quarto por categoria |
+| Categoria — agrupa — Quarto | (1,1) — (0,N) | Todo quarto tem categoria (`NOT NULL` e FK); uma categoria pode existir sem quartos |
 | Quarto — recebe — Reserva | (1,1) — (0,N) | Uma reserva = um quarto |
 | Reserva — pode ter — Cancelamento | (1,1) — (0,1) | `UNIQUE` em `id_reserva`: no máximo um cancelamento por reserva |
 | Reserva — engloba — Consumo_Servico | (1,1) — (0,N) | N:M entre reserva e serviço, resolvido pela associativa |
