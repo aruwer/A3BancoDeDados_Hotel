@@ -3,14 +3,16 @@
 -- Carga de dados fictícia para fins acadêmicos (LGPD): os hóspedes são inventados e não
 -- representam pessoas reais.
 -- Todas as datas são RELATIVAS a CURRENT_DATE / CURRENT_TIMESTAMP, então as consultas
--- dão o mesmo resultado em qualquer dia de execução.
+-- dão o mesmo resultado em qualquer dia de execução (exceção: a divisão por mês do Q05
+-- depende do dia em que a consulta roda; o total geral não muda).
 -- Execução (banco vazio, logo após o 01_ddl.sql):
 --   psql -v ON_ERROR_STOP=1 -f postgresql/01_ddl.sql
 --   psql -v ON_ERROR_STOP=1 -f postgresql/02_inserts.sql
 --
 -- DADOS DE FRONTEIRA
 --   F1 (empate no RANK): Mariana (hósp. 5) e Ricardo (hósp. 6) gastaram exatamente R$ 800,00
---      (reservas 7 e 8) => posição 5 repetida; Luciana fica em 7º. Ana e Carlos têm 2 estadias cada.
+--      (reservas 7 e 8) => posição 5 repetida; Larissa fica em 7º e Luciana em 8º. Ana e Carlos
+--      têm 2 estadias cada.
 --   F2 (limite da multa de cancelamento, regras.md seção 4.1; D = diária; antecedência em dias
 --      contada a partir de hoje, data do cancelamento):
 --        reserva 13: 7 dias => sem multa (limite inferior da faixa sem multa)
@@ -19,9 +21,22 @@
 --        reserva 16: 1 dia  => 100% de D (primeiro dia da faixa de 100%)
 --        reserva 17: NO-SHOW (entrada já passou sem check-in) => 100% de D
 --   F3 (NOT EXISTS): o quarto 302 (ativo) e o quarto 103 (em manutenção) não têm nenhuma reserva.
+--   F4 (janela do Q02, hoje até hoje + 7): reserva 19 CONFIRMADA com entrada em hoje + 7 (último
+--      dia da janela, entra) e reserva 20 CONFIRMADA com entrada em hoje + 8 (um dia depois, fica
+--      de fora). A reserva 20 também bloqueia o quarto 202 no Q04 (entra no período X a Y).
+--   F5 (Q06, "acima de 20%"): a categoria Standard tem 10 reservas e 2 canceladas, exatamente
+--      20,0%, e por isso NÃO aparece; só a Suíte (33,3%) passa do limite.
+--   F6 (Q07): o serviço 8 (Passeio turístico) existe no catálogo e nunca foi consumido (0%);
+--      Lavanderia e Translado aeroporto empatam em 90,00.
+--   F7 (Q09): a hóspede 9 (Larissa) usou 7 dos 8 serviços, todos menos o Passeio turístico,
+--      então não entra; a consulta devolve 0 linhas.
+--   F8 (Q05, mês sem receita): a reserva 21 (CHECK-OUT) sai em hoje - 119, 63 dias antes da
+--      estadia concluída seguinte (hoje - 56), então sempre há ao menos um mês sem receita
+--      entre as duas, qualquer que seja o dia de execução.
 --
 -- Totais gastos (diárias + consumos) das reservas CHECK-OUT, para conferir o ranking:
---   Diego 2420,00 | Bruno 2250,00 | Ana 1550,00 | Carla 1200,00 | Elisa 800,00 = Fábio 800,00 | Gabriela 400,00
+--   João Pedro 2420,00 | Carlos Eduardo 2250,00 | Ana Beatriz 1550,00 | Fernanda 1200,00 |
+--   Mariana 800,00 = Ricardo 800,00 | Larissa 675,00 | Luciana 400,00
 
 BEGIN;
 
@@ -54,7 +69,8 @@ INSERT INTO hospede (id_hospede, cpf, nome_completo, email, telefone, data_cadas
     (5, '24681357928', 'Mariana Costa Ferreira', 'mariana.ferreira@gmail.com','(41) 98234-5678', CURRENT_DATE - 70),
     (6, '13579246828', 'Ricardo Alves Teixeira', 'ricardo.teixeira@hotmail.com','(51) 99345-6789', CURRENT_DATE - 65),
     (7, '11223344517', 'Luciana Prado Nogueira', 'luciana.nogueira@gmail.com','(85) 98456-7890', CURRENT_DATE - 60),
-    (8, '31415926590', 'Gabriel Santos Oliveira', 'gabriel.oliveira@hotmail.com','(62) 99567-8901', CURRENT_DATE - 55);
+    (8, '31415926590', 'Gabriel Santos Oliveira', 'gabriel.oliveira@hotmail.com','(62) 99567-8901', CURRENT_DATE - 55),
+    (9, '11122233396', 'Larissa Mendes Carvalho', 'larissa.carvalho@gmail.com', '(54) 99890-1234', CURRENT_DATE - 140);
 
 -- 4) Serviços
 INSERT INTO servico (id_servico, nome_servico, valor_unitario) VALUES
@@ -63,7 +79,9 @@ INSERT INTO servico (id_servico, nome_servico, valor_unitario) VALUES
     (3, 'Lavanderia',     45.00),
     (4, 'Spa',           150.00),
     (5, 'Frigobar',       25.00),
-    (6, 'Estacionamento', 40.00);
+    (6, 'Estacionamento', 40.00),
+    (7, 'Translado aeroporto', 90.00),
+    (8, 'Passeio turístico', 180.00);
 
 -- 5) Reservas
 -- valor_total_bruto = noites x diária da categoria; percentual_desconto = 0 em todas
@@ -115,6 +133,19 @@ INSERT INTO reserva (
         CURRENT_DATE - 6 + TIME '14:00', CURRENT_DATE - 4 + TIME '11:00',
         'CHECK-OUT', 400.00, 0, 400.00);
 
+-- 5a-2) Fronteiras F7 e F8: estadia concluída de 1 noite, bem antes das demais (mês sem receita
+--       entre ela e a reserva 4). Bruto 200,00 + consumos 475,00 = 675,00.
+INSERT INTO reserva (
+    id_reserva, id_hospede, id_quarto, data_reserva,
+    data_entrada_prevista, data_saida_prevista,
+    data_checkin_real, data_checkout_real,
+    status_reserva, valor_total_bruto, percentual_desconto, valor_final_pago
+) VALUES
+    (21, 9, 1, CURRENT_TIMESTAMP - INTERVAL '130 days',
+        CURRENT_DATE - 120, CURRENT_DATE - 119,
+        CURRENT_DATE - 120 + TIME '14:00', CURRENT_DATE - 119 + TIME '11:00',
+        'CHECK-OUT', 200.00, 0, 675.00);
+
 -- 5b) Hóspede hospedado hoje (CHECK-IN), 4 noites: entrou há 2 dias e sai daqui a 2
 INSERT INTO reserva (
     id_reserva, id_hospede, id_quarto, data_reserva,
@@ -125,7 +156,7 @@ INSERT INTO reserva (
         CURRENT_DATE - 2, CURRENT_DATE + 2, CURRENT_DATE - 2 + TIME '14:00',
         'CHECK-IN', 1200.00, 0);
 
--- 5c) Reservas futuras (CONFIRMADA e PENDENTE)
+-- 5c) Reservas futuras (CONFIRMADA e PENDENTE); 19 e 20 são a fronteira F4 (limite da janela do Q02)
 INSERT INTO reserva (
     id_reserva, id_hospede, id_quarto, data_reserva,
     data_entrada_prevista, data_saida_prevista,
@@ -139,7 +170,13 @@ INSERT INTO reserva (
         'CONFIRMADA', 900.00, 0),
     (18, 7, 4, CURRENT_TIMESTAMP - INTERVAL '1 days',
         CURRENT_DATE + 20, CURRENT_DATE + 22,
-        'PENDENTE', 600.00, 0);
+        'PENDENTE', 600.00, 0),
+    (19, 3, 2, CURRENT_TIMESTAMP - INTERVAL '3 days',
+        CURRENT_DATE + 7, CURRENT_DATE + 8,
+        'CONFIRMADA', 200.00, 0),
+    (20, 5, 5, CURRENT_TIMESTAMP - INTERVAL '2 days',
+        CURRENT_DATE + 8, CURRENT_DATE + 9,
+        'CONFIRMADA', 300.00, 0);
 
 -- 5d) Fronteira F2: cancelamentos (data_cancelamento = agora) e no-show
 INSERT INTO reserva (
@@ -191,7 +228,14 @@ INSERT INTO consumo_servico (id_consumo, id_reserva, id_servico, quantidade,
     ( 9,  8, 2, 1, CURRENT_DATE - 11 + TIME '20:00',  90.00),
     (10,  8, 6, 1, CURRENT_DATE - 12 + TIME '15:00',  40.00),
     (11, 10, 1, 2, CURRENT_DATE -  1 + TIME '08:00',  70.00),
-    (12, 10, 3, 1, CURRENT_DATE -  1 + TIME '18:00',  45.00);
+    (12, 10, 3, 1, CURRENT_DATE -  1 + TIME '18:00',  45.00),
+    (13, 21, 1, 1, CURRENT_DATE - 120 + TIME '08:00',  35.00),
+    (14, 21, 2, 1, CURRENT_DATE - 120 + TIME '20:00',  90.00),
+    (15, 21, 3, 1, CURRENT_DATE - 120 + TIME '18:00',  45.00),
+    (16, 21, 4, 1, CURRENT_DATE - 120 + TIME '16:00', 150.00),
+    (17, 21, 5, 1, CURRENT_DATE - 120 + TIME '22:00',  25.00),
+    (18, 21, 6, 1, CURRENT_DATE - 120 + TIME '15:00',  40.00),
+    (19, 21, 7, 1, CURRENT_DATE - 119 + TIME '09:00',  90.00);
 
 -- 8) Pagamentos (valor sempre positivo; o tipo indica o sentido: PAGAMENTO ou ESTORNO)
 -- Todo sinal é de exatamente 30% das diárias (limite da RN-10). A reserva 18 (PENDENTE) fica
@@ -234,7 +278,11 @@ INSERT INTO Pagamento (id_pagamento, id_reserva, tipo, forma, valor, data_hora) 
     (28, 16, 'PAGAMENTO', 'PIX',            120.00, CURRENT_TIMESTAMP - INTERVAL '7 days'),
     (29, 16, 'PAGAMENTO', 'CARTAO_CREDITO',  80.00, CURRENT_TIMESTAMP),
     (30, 17, 'PAGAMENTO', 'CARTAO_CREDITO', 120.00, CURRENT_TIMESTAMP - INTERVAL '10 days'),
-    (31, 17, 'PAGAMENTO', 'CARTAO_CREDITO',  80.00, CURRENT_TIMESTAMP);
+    (31, 17, 'PAGAMENTO', 'CARTAO_CREDITO',  80.00, CURRENT_TIMESTAMP),
+    (32, 19, 'PAGAMENTO', 'PIX',             60.00, CURRENT_TIMESTAMP - INTERVAL '3 days'),
+    (33, 20, 'PAGAMENTO', 'CARTAO_CREDITO',  90.00, CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    (34, 21, 'PAGAMENTO', 'PIX',             60.00, CURRENT_TIMESTAMP - INTERVAL '130 days'),
+    (35, 21, 'PAGAMENTO', 'CARTAO_CREDITO', 615.00, CURRENT_DATE - 119 + TIME '11:00');
 
 -- 9) Alinha as sequências SERIAL com os ids inseridos explicitamente
 SELECT setval(pg_get_serial_sequence('categoria_quarto', 'id_categoria'),  (SELECT MAX(id_categoria)   FROM Categoria_Quarto));
@@ -247,4 +295,3 @@ SELECT setval(pg_get_serial_sequence('consumo_servico',  'id_consumo'),    (SELE
 SELECT setval(pg_get_serial_sequence('pagamento',        'id_pagamento'),  (SELECT MAX(id_pagamento)   FROM Pagamento));
 
 COMMIT;
-
