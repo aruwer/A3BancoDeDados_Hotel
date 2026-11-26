@@ -3,6 +3,7 @@
 -- Atende aos Critérios: 7 Entidades, Estados Claros na Reserva e Tabela Associativa N:M.
 -- Convenção de constraints: pk_ (chave primária), fk_ (chave estrangeira),
 -- uk_ (única), ck_ (check). Toda FK declara ON DELETE explicitamente e todas bloqueiam a
+-- exclusão (ON DELETE RESTRICT), como pede o regras.md seção 5.3.
 
 CREATE TABLE hospede (
     id_hospede     SERIAL,
