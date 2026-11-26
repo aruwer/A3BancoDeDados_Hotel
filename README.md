@@ -130,7 +130,7 @@ Porta 5432 ocupada? Use `PG_PORT=5433 docker compose up -d --wait`. Mudou um `.s
 
 ### 4.2 O que foi testado
 
-278 testes em pytest + psycopg, rodando contra o banco do compose (cada teste é revertido com ROLLBACK). Os testes seguem os requisitos de `regras.md`, não o código. O roteiro BDD completo (Given/When/Then) está em [`tests/casos-de-teste/roteiro-ct.md`](tests/casos-de-teste/roteiro-ct.md).
+284 testes em pytest + psycopg, rodando contra o banco do compose (cada teste é revertido com ROLLBACK; os de concorrência usam duas conexões reais e apagam o que criaram). Os testes seguem os requisitos de `regras.md`, não o código. O roteiro BDD completo (Given/When/Then) está em [`tests/casos-de-teste/roteiro-ct.md`](tests/casos-de-teste/roteiro-ct.md).
 
 | Arquivo de teste (`tests/unit/`) | Nº de testes | O que verifica |
 |---|---|---|
@@ -139,10 +139,11 @@ Porta 5432 ocupada? Use `PG_PORT=5433 docker compose up -d --wait`. Mudou um `.s
 | `test_ct_u_fazer_checkout.py` | 65 | Caminho feliz e erros de `fazer_checkout`: 12:00:00 e 12:00:01, 18:00:00 e 18:00:01, fidelidade com 4, 5, 9 e 10 estadias, quarto em LIMPEZA |
 | `test_ct_u_trigger_sobreposicao.py` | 21 | Overbooking barrado em INSERT e UPDATE direto, incluindo as fronteiras de data |
 | `test_ct_u_trigger_validacao.py` | 38 | Capacidade, quarto em manutenção e máquina de estados barrados em INSERT e UPDATE direto |
+| `test_ct_u_concorrencia.py` | 6 | Duas sessões ao mesmo tempo: overbooking (datas iguais e parcialmente sobrepostas), dois cancelamentos e dois check-outs da mesma reserva (a segunda sessão espera e recebe `HOTEL-005` ou `HOTEL-007`), quartos diferentes sem bloqueio e ROLLBACK da primeira sessão |
 | `test_ct_u_consultas.py` | 13 | As 10 consultas com resultado esperado calculado à mão; as técnicas exigidas (JOIN, window, agregação, `NOT EXISTS`) |
 | `test_ct_u_contrato_procedures.py` | 18 | Contrato das procedures e do trigger (códigos de erro estáveis, sem COMMIT) e consistência financeira dos dados de exemplo |
 | `test_ct_u_indices.py` | 3 | Os 3 índices existem e cobrem as colunas previstas |
-| **Total** | **278** | |
+| **Total** | **284** | |
 
 Há também `tests/test_procedures.sql` e `tests/test_trigger_sobreposicao.sql`, para rodar no `psql`.
 
@@ -224,7 +225,7 @@ Só o que de fato aconteceu; cada linha tem registro correspondente na seção 7
 | 6 | `python/main.py` | (IA) Isolar a demonstração para ela se repetir | **Erro real:** reserva de demonstração com data fixa em 2099 e check-out com `CURRENT_TIMESTAMP` deram `HOTEL-001` (saída anterior ao check-in) | Datas relativas a hoje, quarto livre escolhido por consulta, `Decimal("200.00")` e ROLLBACK; demonstração rodada duas vezes |
 | 7 | `performance/medir_antes_depois.sql` | (Claude) Script de medição do `EXPLAIN` antes e depois | **Erro real:** usava nomes de colunas de outro esquema e comandos do `psql` que o pgAdmin não entende | Reescrito em SQL puro com os nomes reais das colunas |
 | 8 | `tests/unit/test_ct_u_consultas.py` | (Claude) Testes das 10 consultas com valor esperado à mão | **Erro real:** rodar o arquivo inteiro como uma instrução escondeu que só a Q08 estava quebrada | Cada consulta passou a rodar isolada; a Q08 foi corrigida e todos os testes passam |
-| 9 | `regras.md`, `README.md`, `AGENTS.md` | (Claude) Alinhar nomes de status e caminhos ao DDL | **Omissão:** o relatório listava só `EM_ANDAMENTO`/`FINALIZADA`/`NO_SHOW`; o banco também usa `PENDENTE`, que a documentação não citava | `PENDENTE` incluído no `regras.md`; caminhos corrigidos; testes impedem a volta |
+| 9 | `regras.md`, `README.md`, `AGENTS.md` | (Claude) Alinhar nomes de status e caminhos ao DDL | **Omissão:** o relatório listava só os três nomes de status que divergiam do DDL; o banco também usa `PENDENTE`, que a documentação não citava | `PENDENTE` incluído no `regras.md`; caminhos corrigidos; testes impedem a volta |
 
 ### 7.2 Reflexão do grupo
 
@@ -238,7 +239,7 @@ Só o que de fato aconteceu; cada linha tem registro correspondente na seção 7
 ### Checklist antes da tag v1.0.0
 
 - [ ] `docker compose up -d --wait` sobe do zero, sem erro
-- [ ] `docker compose run --rm testes` verde (278 testes)
+- [ ] `docker compose run --rm testes` verde (284 testes)
 - [ ] `performance/explain_antes_depois.txt` gerado e a tabela da seção 5 preenchida com a saída real
 - [ ] Imagem do DER gerada (seção 2) e adicionada ao README
 - [ ] Nenhuma senha real, chave de API ou `.env` no Git (`git log -p`)
