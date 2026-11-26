@@ -1,4 +1,6 @@
-"""CT-U70 a CT-U115 · RN-05 (fidelidade), RN-08 (late check-out) e RN-09 (pagamento) da procedure fazer_checkout."""
+"""CT-U70 a CT-U115 · RN-05 (fidelidade), RN-08 (late check-out) e RN-09 (pagamento) da procedure fazer_checkout.
+
+CT-U107 (quarto em LIMPEZA, D-02) e CT-U108 (taxa_checkout gravada) também ficam aqui."""
 from datetime import timedelta
 from decimal import Decimal
 
@@ -252,3 +254,138 @@ def test_ct_u115_checkout_libera_o_quarto_para_nova_reserva(conn):
     assert codigo_negocio(conn, sql)[0] == "HOTEL-005"
     fazer_checkout(conn, 10, GRANDE, saida(conn, dias=0, hora="11:00:00"))
     conn.execute(sql)
+
+
+# ------------------------------------------------------------------ D-02: quarto em LIMPEZA (CT-U107)
+def _status_quarto(conn, id_quarto):
+    return um(conn, "SELECT status_quarto FROM quarto WHERE id_quarto=%s", (id_quarto,))[0]
+
+
+def _todos_os_quartos(conn):
+    return dict(todos(conn, "SELECT id_quarto, status_quarto FROM quarto ORDER BY id_quarto"))
+
+
+@pytest.mark.parametrize("antes", ["OCUPADO", "DISPONIVEL", "LIMPEZA"])
+def test_ct_u107_checkout_leva_o_quarto_para_limpeza(conn, antes):
+    """Given uma reserva CHECK-IN no quarto 7, que está OCUPADO (ciclo normal), DISPONIVEL ou já em LIMPEZA
+    When o check-out é feito
+    Then o quarto fica em LIMPEZA (sem fazer_checkin, o quarto pode não ter sido marcado OCUPADO)"""
+    rid = reserva_para_checkout(conn, quarto=7)
+    conn.execute("UPDATE quarto SET status_quarto=%s WHERE id_quarto=7", (antes,))
+    fazer_checkout(conn, rid, GRANDE, saida(conn))
+    assert _status_quarto(conn, 7) == "LIMPEZA"
+
+
+def test_ct_u107_checkout_da_reserva_10_muda_so_o_quarto_202(conn):
+    """Given os dados de exemplo (reserva 10 em CHECK-IN no quarto 5 = 202, OCUPADO)
+    When o check-out da reserva 10 é feito
+    Then só o quarto 5 muda (OCUPADO -> LIMPEZA); os outros seis quartos continuam como estavam"""
+    antes = _todos_os_quartos(conn)
+    assert antes[5] == "OCUPADO"
+    fazer_checkout(conn, 10, GRANDE, saida(conn, dias=0, hora="11:00:00"))
+    depois = _todos_os_quartos(conn)
+    assert depois[5] == "LIMPEZA"
+    assert {k: v for k, v in depois.items() if k != 5} == {k: v for k, v in antes.items() if k != 5}
+
+
+def test_ct_u107_quarto_em_manutencao_nao_e_sobrescrito(conn):
+    """Given um quarto que entrou em MANUTENCAO com o hóspede ainda hospedado
+    When o check-out é feito
+    Then a reserva finaliza, mas o quarto continua em MANUTENCAO (não vira LIMPEZA)"""
+    rid = reserva_para_checkout(conn, quarto=7)
+    conn.execute("UPDATE quarto SET status_quarto='MANUTENCAO' WHERE id_quarto=7")
+    fazer_checkout(conn, rid, GRANDE, saida(conn))
+    assert reserva(conn, rid)["status_reserva"] == "CHECK-OUT"
+    assert _status_quarto(conn, 7) == "MANUTENCAO"
+
+
+def test_ct_u107_checkout_recusado_nao_mexe_no_quarto(conn):
+    """Given um quarto OCUPADO e um valor pago 1 centavo abaixo do saldo
+    When o check-out é tentado
+    Then o banco recusa com HOTEL-009 e o quarto continua OCUPADO (a chamada é atômica)"""
+    rid = reserva_para_checkout(conn, quarto=7)
+    conn.execute("UPDATE quarto SET status_quarto='OCUPADO' WHERE id_quarto=7")
+    codigo, _ = codigo_negocio(conn, "CALL fazer_checkout(%s,%s,%s)", (rid, Decimal("599.99"), saida(conn)))
+    assert codigo == "HOTEL-009"
+    assert _status_quarto(conn, 7) == "OCUPADO"
+
+
+def test_ct_u107_rollback_devolve_o_status_do_quarto(conn):
+    """Given um check-out feito dentro de uma transação
+    When a transação é desfeita
+    Then o quarto 5 volta a OCUPADO (a procedure não faz COMMIT)"""
+    fazer_checkout(conn, 10, GRANDE, saida(conn, dias=0, hora="11:00:00"))
+    assert _status_quarto(conn, 5) == "LIMPEZA"
+    conn.rollback()
+    assert _status_quarto(conn, 5) == "OCUPADO"
+
+
+def test_ct_u107_governanca_devolve_o_quarto_a_disponivel(conn):
+    """Given um quarto em LIMPEZA depois do check-out
+    When a governança faz UPDATE para DISPONIVEL
+    Then o ciclo fecha: OCUPADO -> LIMPEZA -> DISPONIVEL"""
+    fazer_checkout(conn, 10, GRANDE, saida(conn, dias=0, hora="11:00:00"))
+    conn.execute("UPDATE quarto SET status_quarto='DISPONIVEL' WHERE id_quarto=5")
+    assert _status_quarto(conn, 5) == "DISPONIVEL"
+
+
+# ------------------------------------------------------------------ seção 13.2: taxa em coluna própria (CT-U108)
+@pytest.mark.parametrize("hora,taxa", [
+    ("08:00:00", "0.00"), ("12:00:00", "0.00"), ("12:00:01", "100.00"),
+    ("18:00:00", "100.00"), ("18:00:01", "200.00"), ("23:59:59", "200.00"),
+])
+def test_ct_u108_taxa_de_late_checkout_fica_gravada_na_reserva(conn, hora, taxa):
+    """Given uma reserva de bruto R$ 600,00 (D = 200,00), sem desconto
+    When o check-out é feito em cada horário do dia previsto
+    Then reserva.taxa_checkout guarda 0, 50% ou 100% da diária, e valor_final_pago = 600 + taxa"""
+    rid = reserva_para_checkout(conn)
+    fazer_checkout(conn, rid, GRANDE, saida(conn, hora=hora))
+    r = reserva(conn, rid)
+    assert r["taxa_checkout"] == Decimal(taxa)
+    assert r["valor_final_pago"] == Decimal("600.00") + Decimal(taxa)
+
+
+def test_ct_u108_taxa_usa_a_diaria_cheia_mesmo_com_desconto(conn):
+    """Given 10 estadias anteriores (10%) e saída às 12:00:01
+    When o check-out é feito
+    Then taxa_checkout = 100,00 (50% da diária cheia de 200, sem desconto) e percentual_desconto = 10"""
+    rid = reserva_para_checkout(conn, estadias_anteriores=10)
+    fazer_checkout(conn, rid, GRANDE, saida(conn, hora="12:00:01"))
+    r = reserva(conn, rid)
+    assert r["taxa_checkout"] == Decimal("100.00")
+    assert r["percentual_desconto"] == Decimal("10")
+
+
+def test_ct_u108_valor_final_e_a_soma_das_colunas_gravadas(conn):
+    """Given desconto de 5%, um consumo de R$ 100,00 e late check-out às 15:00
+    When o check-out é feito
+    Then valor_final_pago = ROUND(bruto x (1 - desconto/100) + consumos + taxa_checkout, 2) = 770,00,
+         conferido só com colunas da reserva (é isso que Q03, Q05 e Q10 usam, sem recalcular)"""
+    rid = reserva_para_checkout(conn, estadias_anteriores=5)
+    _consumo(conn, rid, Decimal("100.00"))
+    fazer_checkout(conn, rid, GRANDE, saida(conn, hora="15:00:00"))
+    r = reserva(conn, rid)
+    esperado = (r["valor_total_bruto"] * (1 - r["percentual_desconto"] / 100) + Decimal("100.00")
+                + r["taxa_checkout"]).quantize(Decimal("0.01"))
+    assert r["taxa_checkout"] == Decimal("100.00")
+    assert r["valor_final_pago"] == esperado == Decimal("770.00")
+
+
+def test_ct_u108_reserva_ativa_tem_taxa_zero_e_sem_valor_final(conn):
+    """Given uma reserva que ainda não fez check-out
+    Then taxa_checkout é 0 (DEFAULT) e valor_final_pago é nulo até o check-out acontecer"""
+    rid = reserva_para_checkout(conn)
+    r = reserva(conn, rid)
+    assert r["taxa_checkout"] == 0 and r["valor_final_pago"] is None
+
+
+def test_ct_u108_checkout_recusado_nao_grava_taxa(conn):
+    """Given um check-out às 18:00:01 (taxa de 200,00) com pagamento insuficiente
+    When o banco recusa com HOTEL-009
+    Then taxa_checkout continua 0 e a reserva continua em CHECK-IN"""
+    rid = reserva_para_checkout(conn)
+    codigo, _ = codigo_negocio(conn, "CALL fazer_checkout(%s,%s,%s)",
+                               (rid, Decimal("700.00"), saida(conn, hora="18:00:01")))
+    assert codigo == "HOTEL-009"
+    r = reserva(conn, rid)
+    assert r["taxa_checkout"] == 0 and r["status_reserva"] == "CHECK-IN"

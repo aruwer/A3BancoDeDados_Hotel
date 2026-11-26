@@ -5,14 +5,14 @@
 > copiada no comentário `-- @Qnn`. O resultado esperado deve ser o mesmo nos dois bancos.
 >
 > As linhas marcadas **Decisão** fixam os pontos que as perguntas deixariam em aberto
-> (status NO_SHOW e LIMPEZA, desconto no check-out, colunas de checkout, ver `docs/regras.md`);
+> (status NO-SHOW e LIMPEZA, desconto no check-out, colunas de checkout, ver `regras.md`);
 > podem ser trocadas, desde que o teste e os dados de fronteira acompanhem.
 
 ## Convenções (valem para todas as consultas)
 
-- **Estadia concluída** = reserva com status `FINALIZADA`.
-- **Reserva ativa** = `CONFIRMADA` ou `EM_ANDAMENTO`.
-- **Receita de uma estadia** = `valor_final` da reserva FINALIZADA (diárias com desconto + consumos + taxa de late check-out). A receita é contada no mês da `data_saida`.
+- **Estadia concluída** = reserva com status `CHECK-OUT`.
+- **Reserva ativa** = `PENDENTE`, `CONFIRMADA` ou `CHECK-IN`.
+- **Receita de uma estadia** = `valor_final` da reserva CHECK-OUT (diárias com desconto + consumos + taxa de late check-out). A receita é contada no mês da `data_saida`.
 - **Receita de diárias** = noites × `valor_diaria` × (1 − `percentual_desconto`/100).
 - **Cuidado com multiplicação de linhas:** juntar RESERVA com CONSUMO_RESERVA repete a diária para cada consumo. Para somar diárias e consumos juntos (Q03), calcule cada parte numa subconsulta e só depois junte.
 - Datas sempre relativas a hoje (`CURRENT_DATE` no PostgreSQL, `TRUNC(SYSDATE)` no Oracle).
@@ -57,12 +57,12 @@
 **Pergunta:** Quais são os 5 hóspedes que mais gastaram no hotel, somando diárias e consumos, e em que posição ficou cada um (empates na mesma posição)?
 **Para quê:** o marketing escolhe quem convidar para o programa de fidelidade.
 **Dado de fronteira:** dois hóspedes com exatamente o mesmo gasto no 5º lugar, para mostrar a diferença entre RANK e ROW_NUMBER (o resultado traz 6 linhas); um hóspede sem nenhum consumo extra.
-**Decisão:** gasto total = `valor_final` das reservas FINALIZADAS. Se preferirem somar diárias e consumos à mão, atenção à multiplicação de linhas descrita nas convenções.
+**Decisão:** gasto total = `valor_final` das reservas CHECK-OUT. Se preferirem somar diárias e consumos à mão, atenção à multiplicação de linhas descrita nas convenções.
 
 ### Q04 · Quartos disponíveis no período (NOT EXISTS, anti-join)
 **Pergunta:** Quais quartos estão livres para quem quer entrar no dia X e sair no dia Y, ou seja, não têm nenhuma reserva ativa que se sobreponha a esse período?
 **Para quê:** é a pergunta mais frequente da recepção e do site de reservas (regra RN-02).
-**Dado de fronteira:** reserva que termina exatamente no dia X (quarto liberado, não bloqueia) e reserva que começa exatamente no dia Y (também não bloqueia); reserva cancelada ou NO_SHOW no mesmo período (não bloqueia); quarto em manutenção.
+**Dado de fronteira:** reserva que termina exatamente no dia X (quarto liberado, não bloqueia) e reserva que começa exatamente no dia Y (também não bloqueia); reserva cancelada ou NO-SHOW no mesmo período (não bloqueia); quarto em manutenção.
 **Decisão:** quarto com status MANUTENCAO fica fora da lista (RN-06); quarto em LIMPEZA ou OCUPADO entra, porque a disponibilidade aqui depende só das datas das reservas. A condição de sobreposição é a mesma da procedure: `entrada_existente < Y` e `saida_existente > X`.
 
 ### Q05 · Receita acumulada mês a mês (window SUM OVER)
@@ -75,7 +75,7 @@
 **Pergunta:** Quais tipos de quarto têm taxa de cancelamento acima de 20% das reservas feitas?
 **Para quê:** a gerência revisa a política de cancelamento (RN-04) para os tipos problemáticos.
 **Dado de fronteira:** um tipo com taxa exatamente igual a 20% (não entra, a regra é "acima de") e um tipo com 0 cancelamentos.
-**Decisão:** taxa = reservas CANCELADAS dividido por todas as reservas do tipo (em qualquer situação). NO_SHOW não conta como cancelamento aqui; aparece só na Q10. Cuidado com divisão de inteiros: multiplicar por 100.0 antes de dividir.
+**Decisão:** taxa = reservas CANCELADAS dividido por todas as reservas do tipo (em qualquer situação). NO-SHOW não conta como cancelamento aqui; aparece só na Q10. Cuidado com divisão de inteiros: multiplicar por 100.0 antes de dividir.
 
 ### Q07 · Participação de cada serviço na receita de consumo (JOIN + window sobre agregação)
 **Pergunta:** Que percentual da receita de consumos (restaurante, frigobar, lavanderia, spa...) vem de cada serviço?
@@ -93,17 +93,17 @@
 **Pergunta:** Quais hóspedes já consumiram todos os serviços da categoria "Extras" do catálogo (por exemplo spa, translado e lavanderia)?
 **Para quê:** o marketing monta uma lista de clientes de alto engajamento.
 **Dado de fronteira:** hóspede que usou todos menos um (não entra); hóspede que usou um serviço várias vezes mas não todos (não entra); um serviço novo no catálogo que ninguém usou (o resultado pode ficar vazio, e isso precisa ser testado).
-**Decisão:** o modelo precisa de `SERVICO.categoria`, atributo que não existia (ver `docs/regras.md`, seção 7). Valor sugerido: `EXTRA`.
+**Decisão:** o modelo precisa de `SERVICO.categoria`, atributo que não existia (ver `regras.md`, seção 7). Valor sugerido: `EXTRA`.
 
 ### Q10 · Reservas e receita por tipo e situação, com subtotais (JOIN + ROLLUP)
 **Pergunta:** Quantas reservas e quanto de receita existem por tipo de quarto e por situação (concluída, cancelada, no-show), com subtotal de cada tipo e total geral?
 **Para quê:** visão única para a diretoria, com o peso das perdas por cancelamento e no-show.
 **Dado de fronteira:** um tipo sem reservas canceladas (a linha some, mas o subtotal continua certo) e conferência de que o total geral bate com a soma dos subtotais.
-**Decisão:** situações = FINALIZADA, CANCELADA e NO_SHOW (reservas CONFIRMADA e EM_ANDAMENTO ficam fora). Receita das FINALIZADAS = `valor_final`; das CANCELADAS e NO_SHOW = `multa_cancelamento`. Na saída do ROLLUP, rotular as linhas de subtotal e total (`COALESCE(..., 'TOTAL')`).
+**Decisão:** situações = CHECK-OUT, CANCELADA e NO-SHOW (reservas CONFIRMADA e CHECK-IN ficam fora). Receita das CHECK-OUT = `valor_final`; das CANCELADAS e NO-SHOW = `multa_cancelamento`. Na saída do ROLLUP, rotular as linhas de subtotal e total (`COALESCE(..., 'TOTAL')`).
 
 ## Banco de reserva (se alguma pergunta cair)
 
-Ideias a partir do `docs/regras.md` que podem substituir uma das 10 ou virar teste extra:
+Ideias a partir do `regras.md` que podem substituir uma das 10 ou virar teste extra:
 
 - Taxa de ocupação por tipo de quarto no mês (JOIN + agregação).
 - Próxima reserva de cada quarto (ROW_NUMBER com PARTITION BY).
@@ -115,7 +115,7 @@ Ideias a partir do `docs/regras.md` que podem substituir uma das 10 ou virar tes
 
 - [ ] Reserva que chega em exatamente 7 dias, outra em 8 dias e outra hoje (Q02)
 - [ ] Reservas encostadas: saída no dia X e entrada no mesmo dia X, no mesmo quarto (Q04)
-- [ ] Reserva CANCELADA e reserva NO_SHOW em período que se sobrepõe a uma ativa (Q04)
+- [ ] Reserva CANCELADA e reserva NO-SHOW em período que se sobrepõe a uma ativa (Q04)
 - [ ] Quartos nos quatro status: DISPONIVEL, OCUPADO, LIMPEZA, MANUTENCAO (Q04)
 - [ ] Empate de gasto total no 5º lugar do ranking (Q03)
 - [ ] Hóspede com uma estadia só e hóspede com estadias no mesmo dia final (Q08)
@@ -123,9 +123,9 @@ Ideias a partir do `docs/regras.md` que podem substituir uma das 10 ou virar tes
 - [ ] Mês sem receita no meio do ano e estadia que atravessa a virada de mês (Q05)
 - [ ] Serviço nunca consumido e serviço com total empatado (Q07)
 - [ ] Hóspede que usou todos os extras menos um (Q09)
-- [ ] Reservas nas três situações (FINALIZADA, CANCELADA, NO_SHOW) nos tipos principais (Q10)
+- [ ] Reservas nas três situações (CHECK-OUT, CANCELADA, NO-SHOW) nos tipos principais (Q10)
 - [ ] Hóspedes com exatamente 4, 5, 9 e 10 estadias concluídas, para os descontos de 0%, 5% e 10% (Q01, Q03)
-- [ ] Reservas CONFIRMADAS com entrada em hoje+7, +6, +2, +1, hoje e ontem, para as faixas de cancelamento e o NO_SHOW
+- [ ] Reservas CONFIRMADAS com entrada em hoje+7, +6, +2, +1, hoje e ontem, para as faixas de cancelamento e o NO-SHOW
 - [ ] Reserva de 30 noites, reserva de 1 noite e reserva com sinal exatamente igual a 30%
 - [ ] Datas **relativas a hoje** (hoje - 30, hoje + 7...), para o resultado ser o mesmo em qualquer dia
 

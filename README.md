@@ -16,21 +16,21 @@ A recepção controla reservas, hóspedes e cobranças em planilha e papel. Isso
 
 ### 1.2 Regras de negócio
 
-Detalhes, fronteiras e códigos de erro em [`docs/regras.md`](docs/regras.md). Prioridade: **N** = núcleo, **E** = extra (cortar primeiro se o tempo apertar).
+Detalhes, fronteiras e códigos de erro em [`regras.md`](regras.md). Prioridade: **N** = núcleo, **E** = extra (cortar primeiro se o tempo apertar).
 
 | ID | P | Regra (com valor-limite) | Onde é aplicada |
 |---|---|---|---|
 | RN-01 | N | Estadia de no mínimo 1 e no máximo 30 noites; check-out depois do check-in | CHECK + procedure `registrar_reserva` |
 | RN-02 | N | Um quarto não pode ter duas reservas ativas com períodos sobrepostos (sair e entrar no mesmo dia é permitido) | procedure `registrar_reserva` (trava o quarto) + trigger `trg_reserva_sobreposicao` (destaque) |
 | RN-03 | N | Número de hóspedes de 1 até a capacidade do tipo de quarto | trigger `trg_reserva_validacao` + procedure `registrar_reserva` |
-| RN-04 | N | Cancelamento com 7 dias ou mais de antecedência: sem multa; de 2 a 6 dias: 50% da primeira diária; menos de 2 dias: 100%. Entrada já passada sem check-in vira NO_SHOW, com 100% da primeira diária | procedure `cancelar_reserva` |
+| RN-04 | N | Cancelamento com 7 dias ou mais de antecedência: sem multa; de 2 a 6 dias: 50% da primeira diária; menos de 2 dias: 100%. Entrada já passada sem check-in vira NO-SHOW, com 100% da primeira diária | procedure `cancelar_reserva` |
 | RN-05 | E | Desconto de fidelidade sobre as diárias: 5% com 5 a 9 estadias concluídas; 10% com 10 ou mais | procedure `fazer_checkout` |
 | RN-06 | N | Quarto em MANUTENCAO não pode ser reservado; check-in só em quarto DISPONIVEL (MANUTENCAO, LIMPEZA e OCUPADO bloqueiam) | procedures `registrar_reserva` e `fazer_checkin` + CHECK no status |
-| RN-07 | N | A reserva só muda de status pela sequência CONFIRMADA → EM_ANDAMENTO → FINALIZADA, ou CONFIRMADA → CANCELADA / NO_SHOW | trigger `trg_reserva_validacao` |
+| RN-07 | N | A reserva só muda de status pela sequência PENDENTE → CONFIRMADA → CHECK-IN → CHECK-OUT, ou PENDENTE / CONFIRMADA → CANCELADA / NO-SHOW | trigger `trg_reserva_validacao` |
 | RN-08 | N | Check-out até 12:00 sem taxa; até 18:00, 50% da diária; depois, 1 diária inteira | procedure `fazer_checkout` |
 | RN-09 | N | O check-out só finaliza se o pagamento cobrir o saldo (diárias com desconto + consumos + taxa − sinal) | procedure `fazer_checkout` |
 | RN-10 | E | Sinal de no mínimo 30% das diárias na reserva | procedure `registrar_reserva` |
-| RN-11 | E | Consumo só em reserva EM_ANDAMENTO; quantidade maior que zero | trigger `trg_consumo_validacao` + CHECK |
+| RN-11 | E | Consumo só em reserva CHECK-IN; quantidade maior que zero | trigger `trg_consumo_validacao` + CHECK |
 | RN-12 | E | Check-in a partir da data de entrada e antes da data de saída | procedure `fazer_checkin` |
 
 <!-- TODO: ajustar números e regras ao que o professor aprovar no checkpoint 1. Mínimo: 3 regras com número. -->
@@ -53,7 +53,7 @@ Detalhes, fronteiras e códigos de erro em [`docs/regras.md`](docs/regras.md). P
 
 Fonte versionada: [`der/hotelhost.puml`](der/hotelhost.puml) (PlantUML, notação Crow's Foot).
 
-**Entidades:** `HOSPEDE`, `TIPO_QUARTO`, `QUARTO`, `RESERVA` (com estado), `SERVICO`, `CONSUMO_RESERVA` (associativa, com `quantidade` e `preco_unitario`), `PAGAMENTO`, `AUDITORIA_RESERVA`. Atributos principais em `docs/regras.md`, seção 7.
+**Entidades:** `HOSPEDE`, `TIPO_QUARTO`, `QUARTO`, `RESERVA` (com estado), `SERVICO`, `CONSUMO_RESERVA` (associativa, com `quantidade` e `preco_unitario`), `PAGAMENTO`, `AUDITORIA_RESERVA`. Atributos principais em `regras.md`, seção 7.
 
 ### 2.1 Cardinalidades (mín., máx.)
 
@@ -79,7 +79,9 @@ Fonte versionada: [`der/hotelhost.puml`](der/hotelhost.puml) (PlantUML, notaçã
 | Preço unitário copiado para `CONSUMO_RESERVA`, e diária copiada para `RESERVA` | O valor cobrado não muda se o catálogo ou a tarifa mudarem depois |
 | Regra de sobreposição em procedure **e** (destaque) trigger | Defesa em profundidade: a procedure responde cedo; o trigger protege quem faz INSERT direto. No Oracle o trigger precisa ser composto, por causa da tabela mutante (ORA-04091) |
 | Capacidade e transições de status em trigger | São regras que não podem depender de a aplicação lembrar; valem também para INSERT e UPDATE direto |
-| Status NO_SHOW e LIMPEZA | NO_SHOW separa o hóspede que não apareceu do cancelamento antecipado; LIMPEZA dá ao quarto um ciclo realista após o check-out |
+| Status NO-SHOW e LIMPEZA | NO-SHOW separa o hóspede que não apareceu do cancelamento antecipado; LIMPEZA dá ao quarto um ciclo realista após o check-out |
+| `QUARTO.status_quarto` (DISPONIVEL, OCUPADO, LIMPEZA, MANUTENCAO) no lugar do booleano `status_manutencao` | Decisão D-02: `fazer_checkout` leva o quarto a LIMPEZA e a governança o devolve a DISPONIVEL por UPDATE. A disponibilidade para reservar continua dependendo só das datas (só MANUTENCAO bloqueia). Sem `fazer_checkin`, o OCUPADO é marcado por UPDATE direto |
+| `RESERVA.taxa_checkout` e `valor_final_pago` gravados pelo check-out | Receita de late check-out e receita por estadia saem de colunas, sem recalcular diárias, desconto e consumos em cada consulta (regras.md 13.2) |
 | Procedures sem COMMIT | Quem chama decide a transação; os testes e a demonstração usam ROLLBACK |
 | Códigos de erro `HOTEL-00x` iguais nos dois bancos | A aplicação trata o erro de negócio da mesma forma, venha de onde vier |
 | `ON DELETE` explícito em toda FK | Nenhuma FK usa CASCADE: histórico de reservas, consumos e pagamentos não pode sumir; RESTRICT no PostgreSQL e, no Oracle, omitir a cláusula equivale a bloquear |
@@ -115,7 +117,8 @@ hotel-host/
 ├── README.md · AGENTS.md · opencode.json
 ├── docker-compose.yml          # postgres, oracle, testes, app-python, app-java
 ├── der/                        # hotelhost.puml · hotelhost.png
-├── docs/                       # regras.md · perguntas_de_negocio.md · ia-log.md
+├── regras.md · perguntas_de_negocio.md
+├── docs/                       # ia-log.md e logs de IA
 ├── postgresql/                 # 01_ddl · 02_inserts · 03_consultas · 04_indices
 ├── oracle/                     # os mesmos quatro arquivos, em Oracle
 ├── procedures/                 # postgresql_procedures.sql · oracle_procedures.sql
@@ -141,7 +144,7 @@ hotel-host/
 
 ### 4.3 As 10 consultas
 
-Perguntas de negócio, decisões e dados de fronteira em [`docs/perguntas_de_negocio.md`](docs/perguntas_de_negocio.md); SQL em `*/03_consultas.sql`.
+Perguntas de negócio, decisões e dados de fronteira em [`perguntas_de_negocio.md`](perguntas_de_negocio.md); SQL em `*/03_consultas.sql`.
 
 | # | Pergunta | Técnica |
 |---|---|---|

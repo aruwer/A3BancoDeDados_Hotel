@@ -338,7 +338,7 @@ def test_ct_u26_scripts_sem_sintaxe_oracle():
 def test_ct_u27_colunas_de_dinheiro_sao_numeric_10_2(conn):
     """When consulto information_schema
     Then as colunas monetárias são numeric(10,2)"""
-    colunas = [("reserva", "valor_total_bruto"), ("reserva", "valor_final_pago"),
+    colunas = [("reserva", "valor_total_bruto"), ("reserva", "valor_final_pago"), ("reserva", "taxa_checkout"),
                ("categoria_quarto", "valor_diaria_base"), ("servico", "valor_unitario"),
                ("consumo_servico", "valor_total_item"), ("cancelamento", "taxa_multa_aplicada"), ("cancelamento", "valor_devido"),
                ("pagamento", "valor")]
@@ -354,3 +354,86 @@ def test_ct_u28_inserts_usam_datas_relativas():
     sql = (RAIZ / "postgresql" / "02_inserts.sql").read_text(encoding="utf-8")
     sql = "\n".join(l.split("--")[0] for l in sql.splitlines())
     assert re.findall(r"'\d{4}-\d{2}-\d{2}", sql) == []
+
+
+# ------------------------------------------------------------------ D-02 e seção 13.2: status do quarto e taxa de check-out
+@pytest.mark.parametrize("status", ["DISPONIVEL", "OCUPADO", "LIMPEZA", "MANUTENCAO"])
+def test_ct_u38_status_de_quarto_validos_sao_aceitos(conn, status):
+    """When um quarto é inserido com um status do ciclo (DISPONIVEL, OCUPADO, LIMPEZA, MANUTENCAO)
+    Then ele é aceito"""
+    conn.execute("INSERT INTO quarto (id_categoria,numero_quarto,andar,status_quarto) VALUES (1,%s,1,%s)",
+                 ("T-" + status[:4], status))   # numero_quarto é VARCHAR(10)
+
+
+@pytest.mark.parametrize("status", ["LIVRE", "disponivel", "", "EM_MANUTENCAO"])
+def test_ct_u38_status_de_quarto_fora_do_dominio_e_recusado(conn, status):
+    """When um quarto é inserido com status fora do domínio
+    Then o banco recusa com ck_quarto_status"""
+    estado, constraint = erro_banco(
+        conn, "INSERT INTO quarto (id_categoria,numero_quarto,andar,status_quarto) VALUES (1,'T-X',1,%s)", (status,))
+    assert (estado, constraint) == (CHECK, "ck_quarto_status")
+
+
+def test_ct_u38_status_de_quarto_nulo_e_recusado(conn):
+    """When o status do quarto é nulo explicitamente
+    Then o banco recusa por NOT NULL"""
+    estado, _ = erro_banco(
+        conn, "INSERT INTO quarto (id_categoria,numero_quarto,andar,status_quarto) VALUES (1,'T-N',1,NULL)")
+    assert estado == NOT_NULL
+
+
+def test_ct_u38_quarto_novo_nasce_disponivel(conn):
+    """When um quarto é inserido sem informar o status
+    Then ele nasce DISPONIVEL"""
+    qid = um(conn, "INSERT INTO quarto (id_categoria,numero_quarto,andar) VALUES (1,'T-D',1) RETURNING id_quarto")[0]
+    assert um(conn, "SELECT status_quarto FROM quarto WHERE id_quarto=%s", (qid,))[0] == "DISPONIVEL"
+
+
+def test_ct_u39_taxa_de_checkout_negativa_e_recusada(conn):
+    """When uma reserva é inserida com taxa_checkout negativa
+    Then o banco recusa com ck_reserva_taxa_checkout"""
+    estado, constraint = erro_banco(
+        conn,
+        "INSERT INTO reserva (id_hospede,id_quarto,data_entrada_prevista,data_saida_prevista,taxa_checkout,"
+        "valor_total_bruto) VALUES (1,7,CURRENT_DATE+70,CURRENT_DATE+72,-0.01,100)")
+    assert (estado, constraint) == (CHECK, "ck_reserva_taxa_checkout")
+
+
+def test_ct_u39_taxa_de_checkout_zero_e_default_e_aceita(conn):
+    """When uma reserva é inserida sem taxa_checkout, ou com 0,00
+    Then ela é aceita e a taxa fica 0"""
+    rid = _inserir_reserva(conn, 70, 72)
+    assert um(conn, "SELECT taxa_checkout FROM reserva WHERE id_reserva=%s", (rid,))[0] == Decimal("0")
+
+
+# ------------------------------------------------------------------ CT-R12 e CT-M25: documentos alinhados ao DDL
+_DOCS = ["regras.md", "perguntas_de_negocio.md", "README.md", "AGENTS.md"]
+
+
+@pytest.mark.parametrize("doc", _DOCS)
+def test_ct_r12_documentos_usam_os_status_do_ddl(doc):
+    """Given os documentos de referência (regras, perguntas, README, AGENTS)
+    Then nenhum usa os nomes antigos de status (EM_ANDAMENTO, FINALIZADA, NO_SHOW), só os do DDL"""
+    texto = (RAIZ / doc).read_text(encoding="utf-8")
+    assert re.findall(r"EM_ANDAMENTO|FINALIZADAS?\b|NO_SHOW", texto) == []
+
+
+def test_ct_r12_regras_cita_todos_os_status_do_check_do_ddl():
+    """Given o CHECK ck_reserva_status do DDL
+    Then o regras.md cita cada um dos seis status"""
+    ddl = (RAIZ / "postgresql" / "01_ddl.sql").read_text(encoding="utf-8")
+    bloco = re.search(r"ck_reserva_status CHECK \((.*?)\)\s*\)", ddl, re.S).group(1)
+    status = re.findall(r"'([A-Z-]+)'", bloco)
+    assert len(status) == 6
+    regras = (RAIZ / "regras.md").read_text(encoding="utf-8")
+    assert [s for s in status if s not in regras] == []
+
+
+@pytest.mark.parametrize("doc", _DOCS)
+def test_ct_m25_caminhos_citados_existem(doc):
+    """Given um documento que cita caminhos docs/... ou links .md
+    Then cada arquivo citado existe"""
+    texto = (RAIZ / doc).read_text(encoding="utf-8")
+    citados = set(re.findall(r"\bdocs/[\w./-]+\.md\b", texto))
+    citados |= set(re.findall(r"\]\(((?!https?:)[\w./-]+\.md)\)", texto))
+    assert [c for c in citados if not (RAIZ / c).exists()] == []

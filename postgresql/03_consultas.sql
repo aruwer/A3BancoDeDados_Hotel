@@ -128,7 +128,7 @@ SELECT q.numero_quarto,
 FROM quarto q
 JOIN categoria_quarto c ON c.id_categoria = q.id_categoria
 CROSS JOIN periodo p
-WHERE NOT q.status_manutencao
+WHERE q.status_quarto <> 'MANUTENCAO'
   AND NOT EXISTS (
       SELECT 1
       FROM reserva r
@@ -152,7 +152,7 @@ SELECT q.numero_quarto,
 FROM quarto q
 JOIN categoria_quarto c ON c.id_categoria = q.id_categoria
 CROSS JOIN periodo p
-WHERE NOT q.status_manutencao
+WHERE q.status_quarto <> 'MANUTENCAO'
   AND NOT EXISTS (
       SELECT 1
       FROM reserva r

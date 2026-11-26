@@ -7,7 +7,7 @@
 --
 -- Conteúdo:
 --   1) cancelar_reserva(...)  procedure  RN-04 (multa por faixa de dias; NO-SHOW; estorno do sinal) altera RESERVA, CANCELAMENTO e PAGAMENTO
---   2) fazer_checkout(...)    procedure  RN-05, RN-08, RN-09 (fidelidade, late check-out, pagamento) altera RESERVA e PAGAMENTO
+--   2) fazer_checkout(...)    procedure  RN-05, RN-08, RN-09 (fidelidade, late check-out, pagamento) altera RESERVA, QUARTO e PAGAMENTO
 --   3) trg_reserva_sobreposicao  trigger  RN-02 (anti-overbooking, vale para INSERT/UPDATE direto)
 --
 -- Códigos de erro de negócio (formato do projeto, regras.md seção 6; todos com ERRCODE 'P0001'):
@@ -22,9 +22,11 @@
 --   * O sinal de 30% (RN-10) ainda não é lançado (depende de uma procedure registrar_reserva, fora
 --     deste escopo), mas cancelar_reserva e fazer_checkout já trabalham com qualquer PAGAMENTO/ESTORNO
 --     existente (estorno do sinal no cancelamento; desconto do saldo no check-out).
---   * QUARTO só tem status_manutencao (booleano): não há status OCUPADO/LIMPEZA. "Liberar o quarto"
---     acontece porque a reserva deixa de ser ativa (CANCELADA, NO-SHOW, CHECK-OUT) e o trigger
---     trg_reserva_sobreposicao só considera PENDENTE, CONFIRMADA e CHECK-IN como ocupando o quarto.
+--   * QUARTO tem status_quarto (DISPONIVEL, OCUPADO, LIMPEZA, MANUTENCAO; decisão D-02). Sem a procedure
+--     fazer_checkin (fora deste escopo), nada leva o quarto a OCUPADO: isso é feito por UPDATE direto.
+--     fazer_checkout leva o quarto a LIMPEZA. A disponibilidade para reservar continua dependendo só das
+--     datas: o trigger trg_reserva_sobreposicao considera PENDENTE, CONFIRMADA e CHECK-IN como ocupando
+--     o quarto, e CANCELADA, NO-SHOW e CHECK-OUT como liberando.
 --   * RESERVA não guarda a diária: D = valor_total_bruto / noites (os dados de exemplo seguem isso).
 
 -- ---------------------------------------------------------------------------------------------
@@ -172,9 +174,14 @@ $$;
 --
 --   Valor final = ROUND(valor_total_bruto * (1 - desconto/100) + soma dos consumos + taxa, 2).
 --
--- Altera DUAS tabelas na mesma chamada: RESERVA (status CHECK-OUT, data_checkout_real,
--- percentual_desconto, valor_final_pago recalculado) e PAGAMENTO (lança a quitação). Lê
--- CONSUMO_SERVICO e as estadias do hóspede para recalcular o total.
+--   Ciclo do quarto (D-02): o check-out leva o quarto a LIMPEZA; a volta a DISPONIVEL é um UPDATE da
+--   governança. Quarto em MANUTENCAO não é alterado (manutenção iniciada com o hóspede ainda lá).
+--
+-- Altera TRÊS tabelas na mesma chamada: RESERVA (status CHECK-OUT, data_checkout_real,
+-- percentual_desconto, taxa_checkout e valor_final_pago recalculados), QUARTO (status_quarto =
+-- LIMPEZA) e PAGAMENTO (lança a quitação). Lê CONSUMO_SERVICO e as estadias do hóspede para
+-- recalcular o total. A taxa e o valor final ficam em colunas próprias da reserva, então as
+-- consultas de receita não precisam refazer a conta.
 --
 -- Concorrência: lê a reserva com FOR UPDATE; dois check-outs simultâneos da mesma reserva são
 -- serializados e o segundo recebe HOTEL-007 (nunca grava duas quitações).
@@ -201,7 +208,7 @@ DECLARE
     v_estadias   INTEGER;
     v_desconto   NUMERIC;
     v_consumos   NUMERIC;
-    v_taxa       NUMERIC;
+    v_taxa       NUMERIC(10,2);
     v_final      NUMERIC(10,2);
     v_ja_pago    NUMERIC;
     v_saldo      NUMERIC(10,2);
@@ -220,7 +227,7 @@ BEGIN
     END IF;
 
     -- Trava a linha da reserva: serializa check-outs concorrentes da mesma reserva.
-    SELECT r.id_reserva, r.id_hospede, r.status_reserva, r.data_saida_prevista,
+    SELECT r.id_reserva, r.id_hospede, r.id_quarto, r.status_reserva, r.data_saida_prevista,
            r.data_entrada_prevista, r.data_checkin_real, r.valor_total_bruto
     INTO v_res
     FROM reserva r
@@ -287,15 +294,22 @@ BEGIN
             v_saldo, v_final, v_ja_pago, p_valor_pago USING ERRCODE = 'P0001';
     END IF;
 
-    -- Tabela 1: finaliza a reserva e grava o total recalculado.
+    -- Tabela 1: finaliza a reserva e grava a taxa e o total recalculados (colunas próprias).
     UPDATE reserva
        SET status_reserva      = 'CHECK-OUT',
            data_checkout_real  = v_saida,
            percentual_desconto = v_desconto,
+           taxa_checkout       = v_taxa,
            valor_final_pago    = v_final
      WHERE id_reserva = p_id_reserva;
 
-    -- Tabela 2: lança a quitação do saldo (troco não é lançado). Saldo zerado: nada a lançar.
+    -- Tabela 2: o quarto entra em LIMPEZA (D-02). MANUTENCAO é preservado.
+    UPDATE quarto
+       SET status_quarto = 'LIMPEZA'
+     WHERE id_quarto = v_res.id_quarto
+       AND status_quarto <> 'MANUTENCAO';
+
+    -- Tabela 3: lança a quitação do saldo (troco não é lançado). Saldo zerado: nada a lançar.
     IF v_saldo > 0 THEN
         INSERT INTO pagamento (id_reserva, tipo, forma, valor)
         VALUES (p_id_reserva, 'PAGAMENTO', p_forma_pagamento, v_saldo);

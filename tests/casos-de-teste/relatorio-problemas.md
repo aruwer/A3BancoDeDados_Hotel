@@ -118,8 +118,8 @@ Não há teste novo por elas: o roteiro (`roteiro-ct.md`) registra os CTs com st
 | Estorno no cancelamento (tabela 4.1 do `regras.md`) | `cancelar_reserva` grava só a multa; o estorno do `02_inserts.sql` foi inserido à mão |
 | `ck_reserva_desconto` | aceita 0 a 100; o `regras.md` fala em 0, 5 ou 10 |
 | `ON DELETE` | `consumo_servico` e `cancelamento` usam `CASCADE`; o `regras.md` diz que todas as FKs bloqueiam |
-| Nomes de status | banco usa `CHECK-IN`/`CHECK-OUT`/`NO-SHOW`; `regras.md` e `perguntas_de_negocio.md` usam `EM_ANDAMENTO`/`FINALIZADA`/`NO_SHOW` |
-| Caminhos | `AGENTS.md` cita `docs/regras.md`, mas o arquivo está em `regras.md`; `regras.md` cita `docs/perguntas_de_negocio.md`, que está na raiz |
+| Nomes de status (**corrigido**, ver `problemas-por-responsavel.md`) | banco usa `CHECK-IN`/`CHECK-OUT`/`NO-SHOW`; `regras.md` e `perguntas_de_negocio.md` usam `EM_ANDAMENTO`/`FINALIZADA`/`NO_SHOW` |
+| Caminhos (**corrigido**) | `AGENTS.md` cita `docs/regras.md`, mas o arquivo está em `regras.md`; `regras.md` cita `docs/perguntas_de_negocio.md`, que está na raiz |
 | Q09 | consulta considera **todos** os serviços; `perguntas_de_negocio.md` pede só a categoria "Extras", que não existe no DDL |
 
 ---

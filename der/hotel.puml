@@ -33,7 +33,7 @@ entity "Quarto" as quarto {
   * id_categoria : int <<FK>>
   * numero_quarto : varchar(10) <<UNIQUE>>
   andar : int
-  * status_manutencao : boolean
+  * status_quarto : varchar <<CHECK: DISPONIVEL, OCUPADO, LIMPEZA, MANUTENCAO>>
 }
 
 entity "Reserva" as reserva {
@@ -50,6 +50,7 @@ entity "Reserva" as reserva {
   * valor_total_bruto : decimal
   * percentual_desconto : decimal
   valor_final_pago : decimal
+  * taxa_checkout : decimal
 }
 
 entity "Cancelamento" as cancelamento {

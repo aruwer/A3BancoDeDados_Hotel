@@ -62,10 +62,10 @@ Os testes **não encontraram defeito de comportamento** em `cancelar_reserva`, `
 | Id | Problema | Origem no histórico | Gravidade | O que fazer |
 |---|---|---|---|---|
 | Lacuna | `cancelar_reserva` grava só a multa; o estorno do sinal (tabela 4.1) e o "valor devido" não são lançados. O estorno do `02_inserts.sql` foi inserido à mão | `2399f59` / `5df922f` | Média | Lançar o ESTORNO em `pagamento` na procedure, ou registrar o corte da regra |
-| Lacuna | `fazer_checkout` não atualiza o quarto (LIMPEZA, decisão D-02) nem guarda taxa e valor final em colunas próprias (seção 13.2) | `2399f59` | Baixa | Depende da decisão sobre `status` do quarto (com Yuri) |
+| ~~Lacuna~~ **Corrigida** | `fazer_checkout` não atualizava o quarto (LIMPEZA, decisão D-02) nem guardava a taxa em coluna própria (seção 13.2) | `2399f59` | Baixa | Feito: `QUARTO.status_quarto` (`ck_quarto_status`) no lugar de `status_manutencao`, `RESERVA.taxa_checkout`, `fazer_checkout` atualiza as três tabelas. Testes CT-U107, CT-U108, CT-U38, CT-U39, CT-U158 e CT-U159. **Confirmar com Yuri** a troca do booleano pelo `status_quarto` |
 | Lacuna | Regras sem código: RN-03, RN-06, RN-07 (qualquer `UPDATE` de status passa), RN-10, RN-11, RN-12, auditoria, `registrar_reserva` e `fazer_checkin` | `regras.md` (`af3762c`, `45e87cd`, `b0ef3b0`) | Média | Decidir, regra por regra, entre implementar e cortar as "Extra" (seção 2 do `regras.md`) |
-| Nomes | `regras.md` e `perguntas_de_negocio.md` usam `EM_ANDAMENTO`/`FINALIZADA`/`NO_SHOW`; o banco usa `CHECK-IN`/`CHECK-OUT`/`NO-SHOW` | `af3762c` e `44cd078` | Baixa | Alinhar os documentos ao DDL (ou o contrário) em um só commit |
-| Caminho | `regras.md` cita `docs/perguntas_de_negocio.md`, que está na raiz | `af3762c` | Baixa | Corrigir o caminho |
+| ~~Nomes~~ **Corrigido** | `regras.md` e `perguntas_de_negocio.md` usavam `EM_ANDAMENTO`/`FINALIZADA`/`NO_SHOW`; o banco usa `CHECK-IN`/`CHECK-OUT`/`NO-SHOW` | `af3762c` e `44cd078` | Baixa | Feito: documentos alinhados ao DDL em um só commit (`regras.md`, `README.md`, `perguntas_de_negocio.md`). O `PENDENTE`, que só existia no banco, entrou no `regras.md` (status, RN-02, RN-04, máquina de estados). Teste CT-R12 |
+| ~~Caminho~~ **Corrigido** | `regras.md` citava `docs/perguntas_de_negocio.md`, que está na raiz (o mesmo erro estava em `docs/regras.md` no `AGENTS.md`, `README.md` e `perguntas_de_negocio.md`) | `af3762c` | Baixa | Feito: todos os caminhos apontam para a raiz. Teste CT-M25 |
 
 **CTs:** CT-U61, CT-U62, CT-U90 a CT-U96, CT-U107, CT-U108, CT-U120 a CT-U143, CT-U160, CT-U161, CT-R12, CT-M25.
 

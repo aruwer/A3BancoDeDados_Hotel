@@ -1,6 +1,6 @@
 # Regras de negócio: Hotel Host
 
-Documento de referência das regras do Hotel Host. A numeração RN-01 a RN-12 é a mesma usada no `README.md` e em `docs/perguntas_de_negocio.md`. Os detalhes de cada regra (fronteiras, código de erro e onde vira código) estão nas seções a seguir.
+Documento de referência das regras do Hotel Host. A numeração RN-01 a RN-12 é a mesma usada no `README.md` e em `perguntas_de_negocio.md`. Os detalhes de cada regra (fronteiras, código de erro e onde vira código) estão nas seções a seguir.
 
 O Hotel Host é um hotel fictício de pequeno porte. Todos os dados de exemplo são fictícios (nada de CPF, e-mail ou telefone reais, por causa da LGPD).
 
@@ -24,18 +24,20 @@ A recepção controla reservas, hóspedes e cobranças em planilha e papel. Isso
 | Noite | Da data de entrada até a data de saída, sem contar o dia da saída. Entrada dia 10 e saída dia 13 são 3 noites. |
 | Intervalo da reserva | Semiaberto: [entrada, saída). Quem sai no dia 13 libera o quarto para quem entra no dia 13. |
 | Diária (D) | Valor da noite, copiado do tipo de quarto no momento da reserva. Mudar a tarifa depois não altera reservas existentes. |
-| Estadia concluída | Reserva com status FINALIZADA. |
-| Status da reserva | CONFIRMADA, EM_ANDAMENTO, FINALIZADA, CANCELADA, NO_SHOW |
+| Estadia concluída | Reserva com status CHECK-OUT. |
+| Status da reserva | PENDENTE, CONFIRMADA, CHECK-IN, CHECK-OUT, CANCELADA, NO-SHOW (os mesmos valores de `RESERVA.status_reserva`, CHECK `ck_reserva_status`). PENDENTE é o status inicial (DEFAULT): reserva criada e ainda não confirmada |
 | Status do quarto | DISPONIVEL, OCUPADO, LIMPEZA, MANUTENCAO |
 | Tipo de pagamento | PAGAMENTO ou ESTORNO (valor sempre positivo; o tipo indica o sentido) |
 
 Máquina de estados da reserva (única sequência permitida):
 
-- CONFIRMADA → EM_ANDAMENTO (check-in)
-- EM_ANDAMENTO → FINALIZADA (check-out)
+- PENDENTE → CONFIRMADA (confirmação da reserva)
+- PENDENTE → CANCELADA / NO-SHOW (mesmas regras do cancelamento, RN-04)
+- CONFIRMADA → CHECK-IN (check-in)
+- CHECK-IN → CHECK-OUT (check-out)
 - CONFIRMADA → CANCELADA (cancelamento antes da entrada)
-- CONFIRMADA → NO_SHOW (hóspede não apareceu; ver RN-04)
-- FINALIZADA, CANCELADA e NO_SHOW são estados finais.
+- CONFIRMADA → NO-SHOW (hóspede não apareceu; ver RN-04)
+- CHECK-OUT, CANCELADA e NO-SHOW são estados finais.
 
 Ciclo do quarto: DISPONIVEL → OCUPADO (check-in) → LIMPEZA (check-out) → DISPONIVEL (governança, por UPDATE). MANUTENCAO é definido e removido por UPDATE direto.
 
@@ -44,16 +46,16 @@ Ciclo do quarto: DISPONIVEL → OCUPADO (check-in) → LIMPEZA (check-out) → D
 | ID | Prior. | Regra (com números) | Fronteiras para testar | Onde vira código | Erro |
 |---|---|---|---|---|---|
 | RN-01 | Núcleo | Estadia de 1 a 30 noites; a saída é sempre depois da entrada. | 0 noite (recusa), 1 (aceita), 30 (aceita), 31 (recusa) | CHECK na RESERVA e conferência na procedure `registrar_reserva` | HOTEL-002 |
-| RN-02 | Núcleo | Um quarto não pode ter duas reservas ativas (CONFIRMADA ou EM_ANDAMENTO) com períodos sobrepostos, usando [entrada, saída). Sair e entrar no mesmo dia é permitido. | saída = entrada da outra (aceita); sobreposição de 1 noite (recusa); reserva CANCELADA ou NO_SHOW não bloqueia | Procedure `registrar_reserva` com trava no quarto (FOR UPDATE). Destaque opcional: trigger `trg_reserva_sobreposicao` (ver seção 9.1) | HOTEL-005 |
+| RN-02 | Núcleo | Um quarto não pode ter duas reservas ativas (PENDENTE, CONFIRMADA ou CHECK-IN) com períodos sobrepostos, usando [entrada, saída). Sair e entrar no mesmo dia é permitido. | saída = entrada da outra (aceita); sobreposição de 1 noite (recusa); reserva CANCELADA ou NO-SHOW não bloqueia | Procedure `registrar_reserva` com trava no quarto (FOR UPDATE). Destaque opcional: trigger `trg_reserva_sobreposicao` (ver seção 9.1) | HOTEL-005 |
 | RN-03 | Núcleo | O número de hóspedes vai de 1 até a capacidade do tipo do quarto. | igual à capacidade (aceita), capacidade + 1 (recusa), 0 (recusa) | Trigger `trg_reserva_validacao` (vale para INSERT direto) e procedure | HOTEL-003 |
-| RN-04 | Núcleo | Cancelamento só para reserva CONFIRMADA. Multa por faixa de dias até a entrada (tabela 4.1): 7 dias ou mais, sem multa; de 2 a 6 dias, 50% da primeira diária; menos de 2 dias, 100% da primeira diária. Se a entrada já passou sem check-in, a reserva vira NO_SHOW com multa de 100% da primeira diária. | 7, 6, 2, 1 e 0 dias; entrada ontem (NO_SHOW); reserva já CANCELADA (recusa) | Procedure `cancelar_reserva` (altera RESERVA, CANCELAMENTO e PAGAMENTO) | HOTEL-006, HOTEL-007 |
+| RN-04 | Núcleo | Cancelamento só para reserva PENDENTE ou CONFIRMADA. Multa por faixa de dias até a entrada (tabela 4.1): 7 dias ou mais, sem multa; de 2 a 6 dias, 50% da primeira diária; menos de 2 dias, 100% da primeira diária. Se a entrada já passou sem check-in, a reserva vira NO-SHOW com multa de 100% da primeira diária. | 7, 6, 2, 1 e 0 dias; entrada ontem (NO-SHOW); reserva já CANCELADA (recusa) | Procedure `cancelar_reserva` (altera RESERVA, CANCELAMENTO e PAGAMENTO) | HOTEL-006, HOTEL-007 |
 | RN-05 | Extra | Desconto de fidelidade sobre as diárias, conforme as estadias concluídas anteriores do hóspede: 0 a 4, sem desconto; 5 a 9, 5%; 10 ou mais, 10%. Aplicado no check-out. | hóspedes com exatamente 4, 5, 9 e 10 estadias concluídas | Procedure `fazer_checkout` | — |
 | RN-06 | Núcleo | Quarto em MANUTENCAO não pode ser reservado. O check-in só ocorre em quarto DISPONIVEL: quarto em MANUTENCAO, LIMPEZA ou OCUPADO não recebe check-in. | reserva em quarto DISPONIVEL (aceita) e MANUTENCAO (recusa); check-in em LIMPEZA, MANUTENCAO e OCUPADO (recusa); quarto inexistente (recusa) | Procedures `registrar_reserva` e `fazer_checkin`; CHECK no status do quarto | HOTEL-004 |
-| RN-07 | Núcleo | A reserva só muda de status pela sequência da seção 3. | cada transição válida e pelo menos duas inválidas (FINALIZADA → CONFIRMADA, CANCELADA → EM_ANDAMENTO) | Trigger `trg_reserva_validacao`, BEFORE UPDATE (vale para UPDATE direto) | HOTEL-007 |
+| RN-07 | Núcleo | A reserva só muda de status pela sequência da seção 3. | cada transição válida e pelo menos duas inválidas (CHECK-OUT → CONFIRMADA, CANCELADA → CHECK-IN) | Trigger `trg_reserva_validacao`, BEFORE UPDATE (vale para UPDATE direto) | HOTEL-007 |
 | RN-08 | Núcleo | No check-out, o horário padrão é 12:00 do dia da saída. Até 12:00:00 não há taxa; depois de 12:00 e até 18:00:00, taxa de 50% da diária; depois de 18:00:00, 1 diária inteira. Saída antes do dia previsto não gera estorno. Saída depois do dia previsto é recusada (a reserva precisa ser prorrogada). | 12:00:00, 12:00:01, 18:00:00, 18:00:01, saída antecipada, dia posterior | Procedure `fazer_checkout` (altera RESERVA, QUARTO e PAGAMENTO) | HOTEL-012 |
 | RN-09 | Núcleo | O check-out só finaliza se o pagamento cobrir o saldo (seção 4.3). | valor igual ao saldo (aceita), 1 centavo a menos (recusa) | Procedure `fazer_checkout` | HOTEL-009 |
 | RN-10 | Extra | A reserva exige sinal de pelo menos 30% do valor das diárias (noites × D, sem desconto). O sinal é registrado como pagamento. | exatamente 30% (aceita), 30% menos 1 centavo (recusa) | Procedure `registrar_reserva` (altera RESERVA e PAGAMENTO) | HOTEL-013 |
-| RN-11 | Extra | Só se lança consumo em reserva EM_ANDAMENTO. A quantidade é maior que zero e o preço unitário é copiado do serviço no lançamento. | consumo em CONFIRMADA ou FINALIZADA (recusa), quantidade 0 (recusa) | Trigger `trg_consumo_validacao` e CHECK | HOTEL-010 |
+| RN-11 | Extra | Só se lança consumo em reserva CHECK-IN. A quantidade é maior que zero e o preço unitário é copiado do serviço no lançamento. | consumo em CONFIRMADA ou CHECK-OUT (recusa), quantidade 0 (recusa) | Trigger `trg_consumo_validacao` e CHECK | HOTEL-010 |
 | RN-12 | Extra | O check-in ocorre a partir da data de entrada e antes da data de saída. | dia da entrada (aceita), véspera (recusa), dia da saída (recusa) | Procedure `fazer_checkin` (altera RESERVA e QUARTO) | HOTEL-008 |
 
 ### 4.1 Multa de cancelamento (RN-04)
@@ -65,7 +67,7 @@ Base: D = diária da reserva. Dias até a entrada = data de entrada − hoje. Es
 | 7 ou mais | 0 | CANCELADA | multa 0,00; estorno 180,00 |
 | de 2 a 6 | 50% de D | CANCELADA | multa 100,00; estorno 80,00 |
 | 0 ou 1 | 100% de D | CANCELADA | multa 200,00; estorno 0,00 (180 − 200 fica negativo, vira 0) |
-| negativo (entrada já passou) | 100% de D | NO_SHOW | multa 200,00; estorno 0,00 |
+| negativo (entrada já passou) | 100% de D | NO-SHOW | multa 200,00; estorno 0,00 |
 
 A multa fica gravada em `CANCELAMENTO.taxa_multa_aplicada`. O estorno é lançado em `PAGAMENTO` (tipo ESTORNO) pela própria `cancelar_reserva`. A parte que o sinal não cobre é registrada em `CANCELAMENTO.valor_devido`; a cobrança em si está fora do escopo.
 
@@ -81,7 +83,7 @@ A taxa usa a diária cheia da reserva (sem desconto de fidelidade).
 
 ### 4.3 Valor final e saldo (RN-05 e RN-09)
 
-- Desconto % = 0, 5 ou 10, conforme a RN-05. Conta só estadias FINALIZADAS anteriores; a reserva em checkout ainda não conta.
+- Desconto % = 0, 5 ou 10, conforme a RN-05. Conta só estadias CHECK-OUT anteriores; a reserva em checkout ainda não conta.
 - Valor final = noites × D × (1 − desconto%) + soma dos consumos (quantidade × preço unitário) + taxa de late check-out.
 - Saldo = valor final − (pagamentos − estornos já registrados).
 - A procedure recebe o valor entregue pelo hóspede, exige que seja maior ou igual ao saldo e registra um PAGAMENTO do valor do saldo (troco é assunto do caixa).
@@ -138,7 +140,7 @@ No PostgreSQL: `RAISE EXCEPTION 'HOTEL-00x: mensagem' USING ERRCODE = 'P0001'`. 
 | HOTEL-007 | Transição de status inválida | -20007 |
 | HOTEL-008 | Check-in fora da janela de datas | -20008 |
 | HOTEL-009 | Pagamento insuficiente no check-out | -20009 |
-| HOTEL-010 | Consumo em reserva que não está EM_ANDAMENTO | -20010 |
+| HOTEL-010 | Consumo em reserva que não está CHECK-IN | -20010 |
 | HOTEL-012 | Check-out depois do dia previsto de saída | -20012 |
 | HOTEL-013 | Sinal abaixo de 30% das diárias | -20013 |
 
@@ -165,18 +167,18 @@ Decisão de modelagem a justificar no README: **uma reserva = um quarto.** Reser
 
 ## 8. Dados de fronteira para o 02_inserts.sql
 
-Todas as datas relativas a hoje (`CURRENT_DATE` no PostgreSQL, `TRUNC(SYSDATE)` no Oracle). O checklist completo por consulta está em `docs/perguntas_de_negocio.md`; abaixo, o que vem das regras.
+Todas as datas relativas a hoje (`CURRENT_DATE` no PostgreSQL, `TRUNC(SYSDATE)` no Oracle). O checklist completo por consulta está em `perguntas_de_negocio.md`; abaixo, o que vem das regras.
 
 - Tipos de quarto: um de capacidade 2 (D = 200,00), um de capacidade 4 (350,00) e um de capacidade 3 (500,00).
 - Quartos nos quatro status: DISPONIVEL, OCUPADO, LIMPEZA e MANUTENCAO.
 - Reservas em quartos vizinhos com saída de uma no mesmo dia da entrada da outra (back-to-back).
 - Reserva com saída hoje e reserva com entrada hoje.
-- Reservas CONFIRMADAS com entrada em hoje+7, hoje+6, hoje+2, hoje+1 e hoje (as faixas do cancelamento), mais uma CONFIRMADA com entrada ontem (NO_SHOW).
+- Reservas CONFIRMADAS com entrada em hoje+7, hoje+6, hoje+2, hoje+1 e hoje (as faixas do cancelamento), mais uma CONFIRMADA com entrada ontem (NO-SHOW).
 - Reserva de exatamente 30 noites e uma de 1 noite.
 - Reserva com sinal exatamente igual a 30% das diárias.
-- Hóspedes com exatamente 4, 5, 9 e 10 estadias FINALIZADAS (fronteiras da fidelidade).
-- Reserva CANCELADA e reserva NO_SHOW nas mesmas datas de uma reserva ativa no mesmo quarto (prova que não bloqueiam).
-- Consumos em reserva EM_ANDAMENTO.
+- Hóspedes com exatamente 4, 5, 9 e 10 estadias CHECK-OUT (fronteiras da fidelidade).
+- Reserva CANCELADA e reserva NO-SHOW nas mesmas datas de uma reserva ativa no mesmo quarto (prova que não bloqueiam).
+- Consumos em reserva CHECK-IN.
 
 ## 9. Concorrência
 
@@ -243,7 +245,7 @@ Sem o trigger, a RN-02 continua garantida pela procedure, mas não para INSERT d
 | Ponto | Decisão |
 |---|---|
 | Multa de cancelamento | 2 a 6 dias: 50% da primeira diária; menos de 2 dias ou no-show: 100% da primeira diária (só depende de D, a antecedência em dias) |
-| No-show | Status NO_SHOW, gerado por `cancelar_reserva` quando a data de entrada já passou sem check-in |
+| No-show | Status NO-SHOW, gerado por `cancelar_reserva` quando a data de entrada já passou sem check-in |
 | Desconto de fidelidade | 5% (5 a 9 estadias concluídas) e 10% (10 ou mais), aplicado no check-out |
 | Status do quarto | DISPONIVEL, OCUPADO, LIMPEZA e MANUTENCAO, com ciclo definido |
 | Sobreposição em trigger | Procedure no núcleo; trigger como destaque, com o aviso do ORA-04091 |
@@ -253,5 +255,7 @@ Sem o trigger, a RN-02 continua garantida pela procedure, mas não para INSERT d
 ### 13.2 Ajustes no modelo exigidos pelas consultas
 
 - `SERVICO.categoria`: a Q09 fala em serviços da categoria Extras.
-- Status NO_SHOW: a Q10 agrupa por concluída, cancelada e no-show.
+- Status NO-SHOW: a Q10 agrupa por concluída, cancelada e no-show.
 - Colunas de checkout em RESERVA (`valor_final`, `taxa_checkout`, `percentual_desconto`): necessárias para Q01, Q03 e Q05 sem recalcular tudo.
+  - **Implementado no DDL:** `RESERVA.valor_final_pago` (é o `valor_final`), `RESERVA.taxa_checkout` (`NOT NULL DEFAULT 0`, `ck_reserva_taxa_checkout`) e `RESERVA.percentual_desconto`, todas gravadas por `fazer_checkout`.
+  - **Implementado no DDL:** `QUARTO.status_quarto` (`ck_quarto_status`: DISPONIVEL, OCUPADO, LIMPEZA, MANUTENCAO), no lugar do booleano `status_manutencao`. A decisão D-02 está em vigor: `fazer_checkout` leva o quarto a LIMPEZA (e não sobrescreve MANUTENCAO).
