@@ -12,16 +12,20 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
 
 ## 1. Problemas que fazem teste falhar
 
-### P-01 · Q08 não executa (SQL inválido) · Gravidade alta
+### P-01 · Q08 não executa (SQL inválido) · Gravidade alta · **CORRIGIDO**
+
+> **Corrigido:** o `SELECT` externo da Q08 agora usa `t.` nas duas cópias da consulta. O CT-U177 deixou de ser `xfail` e passa.
 
 - **Onde:** `postgresql/03_consultas.sql`, consulta Q08 (a mesma falha existe na versão anterior, commit `2ef6357`).
 - **Evidência:** `ERROR: missing FROM-clause entry for table "r"` (SQLSTATE 42P01). O `SELECT` externo lê `r.data_entrada_prevista`, `r.data_saida_prevista`, `r.valor_final_pago`, mas `r` só existe dentro da subconsulta; no nível de fora o alias é `t`.
 - **Impacto:** a rubrica (critério 3, 10 pontos) diz "10 consultas, resultado conferido". Hoje são 9. Como `03_consultas.sql` é uma única instrução com `UNION ALL`, **uma consulta quebrada derruba o arquivo inteiro**: rodar o arquivo no `psql` ou no pgAdmin não devolve nenhum resultado.
 - **Correção sugerida:** no `SELECT` externo da Q08, trocar `r.data_entrada_prevista`, `r.data_saida_prevista` e `r.valor_final_pago` por `t.`, e `CURRENT_DATE - r.data_saida_prevista` por `CURRENT_DATE - t.data_saida_prevista`.
 - **Verificação feita:** com essa troca a Q08 devolve 7 linhas, idênticas ao valor calculado à mão no teste (Luciana 4 dias, Mariana 7, Ricardo 10, Carlos 12, Ana 18, Fernanda 21, João 56).
-- **CT:** CT-U177 (`test_ct_u177_q08_ultima_estadia_de_cada_hospede`, marcado BUG-01).
+- **CT:** CT-U177 (`test_ct_u177_q08_ultima_estadia_de_cada_hospede`, antes marcado BUG-01, agora passa).
 
-### P-02 · `03_consultas.sql` foi substituído por um arquivo gerado e perdeu o conteúdo · Gravidade alta
+### P-02 · `03_consultas.sql` foi substituído por um arquivo gerado e perdeu o conteúdo · Gravidade alta · **CORRIGIDO (parcial)**
+
+> **Corrigido:** o cabeçalho enganoso ("NAO EDITE A MAO", gerador inexistente) foi substituído por uma explicação do formato, e cada Q01 a Q10 tem `-- @Qnn Objetivo` e `-- @Qnn Técnica`. O CT-U181 deixou de ser `xfail` e passa. **Não restaurado:** os comentários "Resultado esperado" de cada consulta, que existiam em `2ef6357` (os valores esperados continuam nos testes). Para recuperá-los: `git show 2ef6357:postgresql/03_consultas.sql`.
 
 - **Onde:** `postgresql/03_consultas.sql` (PR #29, commit `4a45258`).
 - **Evidência:** a primeira linha agora diz `GERADO por scripts/gerar_consultas_pgadmin.py a partir de postgresql/03_consultas.sql. NAO EDITE A MAO.`
@@ -31,7 +35,7 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
 - **Impacto:** o enunciado exige "cada consulta com o objetivo em um comentário" e "resultado conferido por um teste com o valor esperado calculado à mão". Hoje o valor esperado só existe nos testes novos. Na defesa oral, o professor abre o arquivo e vê SQL de máquina.
 - **Contexto no histórico:** o `docs/Log-IA-Joao` (linha 7 do resumo da conversa) diz que um gerador das 10 consultas para o pgAdmin foi criado; ele provavelmente está só na máquina de quem o escreveu e não foi commitado.
 - **Correção sugerida:** restaurar a versão com comentários (`git show 2ef6357:postgresql/03_consultas.sql`), aplicar a correção do P-01 e, se o grupo quiser o formato para pgAdmin, manter o gerador e a saída em outro caminho (por exemplo `scripts/` e `performance/`), nunca no lugar do arquivo oficial.
-- **CT:** CT-U181 (`test_ct_u181_cada_consulta_tem_objetivo_em_comentario`, marcado BUG-02).
+- **CT:** CT-U181 (`test_ct_u181_cada_consulta_tem_objetivo_em_comentario`, antes marcado BUG-02, agora passa).
 - **Contraprova positiva:** as outras 9 consultas (Q01 a Q07, Q09 e Q10) devolvem exatamente os valores calculados à mão (CT-U170 a CT-U179), então a lógica delas está correta. O problema é de organização e de Q08.
 
 ---

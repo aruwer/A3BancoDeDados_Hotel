@@ -20,12 +20,12 @@ A pessoa listada é o **autor do commit que introduziu** o trecho com problema (
 
 | Id | Problema | Origem no histórico | Gravidade | O que fazer |
 |---|---|---|---|---|
-| P-01 | Q08 não executa (`missing FROM-clause entry for table "r"`); o `SELECT` externo usa `r.` em vez de `t.`. A falha derruba o arquivo inteiro | `cfb46e3` "Parte pessoa 2" (a versão anterior de Yuri, `dccfe34`, ainda não tinha o defeito) | Alta | Trocar `r.` por `t.` no `SELECT` externo da Q08 (correção verificada no relatório) |
-| P-02 | `03_consultas.sql` virou saída gerada para pgAdmin: sem comentários `-- @Qnn`, sem "Resultado esperado", e o gerador `scripts/gerar_consultas_pgadmin.py` não está no repositório | `4a45258` "Refactor SQL queries for business analysis Q01-Q10" | Alta | Restaurar a versão com comentários (`git show 2ef6357:postgresql/03_consultas.sql`), manter o formato de pgAdmin em outro caminho e versionar o gerador |
+| ~~P-01~~ **Corrigido** | Q08 não executa (`missing FROM-clause entry for table "r"`); o `SELECT` externo usa `r.` em vez de `t.`. A falha derruba o arquivo inteiro | `cfb46e3` "Parte pessoa 2" (a versão anterior de Yuri, `dccfe34`, ainda não tinha o defeito) | Alta | Feito: `r.` trocado por `t.` no `SELECT` externo da Q08 (CT-U177 passa) |
+| ~~P-02~~ **Corrigido (parcial)** | `03_consultas.sql` virou saída gerada para pgAdmin: sem comentários `-- @Qnn`, sem "Resultado esperado", e o gerador `scripts/gerar_consultas_pgadmin.py` não está no repositório | `4a45258` "Refactor SQL queries for business analysis Q01-Q10" | Alta | Restaurar a versão com comentários (`git show 2ef6357:postgresql/03_consultas.sql`), manter o formato de pgAdmin em outro caminho e versionar o gerador |
 | P-08 (Q02, Q06, Q07, Q09) | As consultas passam, mas os dados não cobrem as fronteiras de D+7, de 20% exato, de serviço nunca usado e de "todos menos um" | Consultas em `cfb46e3`; os dados são de Yuri | Baixa | Em conjunto com Yuri: pedir as linhas faltantes para `02_inserts.sql` |
 | Q09 | Considera todos os serviços; o planejamento pede só a categoria "Extras" | `cfb46e3` | Baixa | Depende de Yuri criar `servico.categoria`; depois filtrar a Q09 |
 
-**CTs:** CT-U177 (BUG-01), CT-U181 (BUG-02), CT-U178.
+**CTs:** CT-U177 (BUG-01, corrigido), CT-U181 (BUG-02, corrigido: objetivos `-- @Qnn` e cabeçalho; falta restaurar os "Resultado esperado" de `2ef6357`), CT-U178.
 
 ---
 

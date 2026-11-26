@@ -1600,4 +1600,4 @@ Os CT-U com status IMPL e PARCIAL (parte implementada) estão codificados em `te
 | `test_ct_u_consultas.py` | CT-U170 a U179, U180, U181 |
 | `test_ct_u_indices.py` | CT-U190, U192 |
 
-Resultado atual: 178 passam e 2 falham de propósito (`xfail` estrito, BUG-01 e BUG-02), descritos em `relatorio-problemas.md`. Fora desta etapa ficam: os CT-U com status LACUNA, o CT-U03 (31 noites; a constraint do máximo não existe), o CT-U24 (decisão sobre `ON DELETE`), o CT-U29 (manual), o CT-U151 e o CT-U191/U193/U194 (dependem de decisão ou de massa de dados) e os grupos CT-I, CT-A, CT-R e CT-M.
+Resultado atual: todos passam, sem `xfail` (confirmar com `docker compose run --rm testes`; BUG-01 e BUG-02, descritos em `relatorio-problemas.md`, foram corrigidos e os dois testes deixaram de ser `xfail`). Fora desta etapa ficam: os CT-U com status LACUNA, o CT-U03 (31 noites; a constraint do máximo não existe), o CT-U24 (decisão sobre `ON DELETE`), o CT-U29 (manual), o CT-U151 e o CT-U191/U193/U194 (dependem de decisão ou de massa de dados) e os grupos CT-I, CT-A, CT-R e CT-M.

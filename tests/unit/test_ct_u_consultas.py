@@ -133,8 +133,6 @@ def test_ct_u176_q07_participacao_de_cada_servico(resultados):
     assert abs(sum(Decimal(str(l["percentual"])) for l in q07) - 100) <= Decimal("0.3")
 
 
-@pytest.mark.bug
-@pytest.mark.xfail(strict=True, reason="BUG-01: Q08 referencia r.* fora do escopo (alias da subconsulta é t)")
 def test_ct_u177_q08_ultima_estadia_de_cada_hospede(resultados):
     """Given as estadias CHECK-OUT; Ana e Carlos têm duas (vale a mais recente) e Gabriel não tem nenhuma
     When executo Q08
@@ -200,8 +198,6 @@ def test_ct_u180_rubrica_tecnicas_exigidas():
     assert len(join) >= 2 and len(window) >= 2 and len(agregacao) >= 2 and len(anti_join) >= 1
 
 
-@pytest.mark.bug
-@pytest.mark.xfail(strict=True, reason="BUG-02: 03_consultas.sql gerado perdeu os comentários -- @Qnn com o objetivo")
 def test_ct_u181_cada_consulta_tem_objetivo_em_comentario():
     """Given o arquivo 03_consultas.sql
     Then cada consulta Q01 a Q10 tem um comentário '-- @Qnn' com o objetivo (exigência do enunciado)"""
