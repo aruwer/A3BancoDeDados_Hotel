@@ -31,15 +31,19 @@ INSERT INTO categoria_quarto (id_categoria, nome_categoria,capacidade_maxima, va
     (2, 'Superior', 3, 300.00),
     (3, 'Suíte',    4, 500.00);
 
--- 2) Quartos (103 em manutenção; 302 sem nenhuma reserva)
-INSERT INTO quarto (id_quarto, id_categoria, numero_quarto, andar, status_manutencao) VALUES
-    (1, 1, '101', 1, FALSE),
-    (2, 1, '102', 1, FALSE),
-    (3, 1, '103', 1, TRUE),
-    (4, 2, '201', 2, FALSE),
-    (5, 2, '202', 2, FALSE),
-    (6, 3, '301', 3, FALSE),
-    (7, 3, '302', 3, FALSE);
+-- 2) Quartos, com os quatro status do ciclo (regras.md seção 3):
+--    101 LIMPEZA     (a reserva 9 fez check-out há 4 dias; aguarda a governança)
+--    202 OCUPADO     (reserva 10 em CHECK-IN)
+--    103 MANUTENCAO  (não pode ser reservado)
+--    302 DISPONIVEL e sem nenhuma reserva; os demais também DISPONIVEL
+INSERT INTO quarto (id_quarto, id_categoria, numero_quarto, andar, status_quarto) VALUES
+    (1, 1, '101', 1, 'LIMPEZA'),
+    (2, 1, '102', 1, 'DISPONIVEL'),
+    (3, 1, '103', 1, 'MANUTENCAO'),
+    (4, 2, '201', 2, 'DISPONIVEL'),
+    (5, 2, '202', 2, 'OCUPADO'),
+    (6, 3, '301', 3, 'DISPONIVEL'),
+    (7, 3, '302', 3, 'DISPONIVEL');
 
 -- 3) Hóspedes (todos fictícios)
 INSERT INTO hospede (id_hospede, cpf, nome_completo, email, telefone, data_cadastro) VALUES
@@ -64,7 +68,8 @@ INSERT INTO servico (id_servico, nome_servico, valor_unitario) VALUES
 -- 5) Reservas
 -- valor_total_bruto = noites x diária da categoria; percentual_desconto = 0 em todas
 -- (desconto de fidelidade exige 5+ estadias, ninguém chega lá nesta carga).
--- valor_final_pago = bruto + consumos, preenchido só nas reservas CHECK-OUT.
+-- valor_final_pago = bruto + consumos + taxa_checkout, preenchido só nas reservas CHECK-OUT.
+-- taxa_checkout fica no DEFAULT 0 em todas: nenhuma saída desta carga passou de 12:00 (saem às 11:00).
 
 -- 5a) Estadias concluídas (CHECK-OUT): entrada às 14:00, saída às 11:00
 INSERT INTO reserva (
