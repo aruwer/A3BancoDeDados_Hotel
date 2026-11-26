@@ -33,6 +33,10 @@ Detalhes, fronteiras e códigos de erro em [`regras.md`](regras.md). Prioridade:
 | RN-11 | E | Consumo só em reserva CHECK-IN; quantidade maior que zero | trigger `trg_consumo_validacao` + CHECK |
 | RN-12 | E | Check-in a partir da data de entrada e antes da data de saída | procedure `fazer_checkin` |
 
+**Estado da implementação.** Implementadas no banco: RN-02, RN-03, RN-04, RN-05, RN-06 (reserva em manutenção), RN-07, RN-08 e RN-09. RN-03, RN-06 e RN-07 estão no trigger `trg_reserva_validacao`, que vale também para INSERT e UPDATE direto.
+
+**Cortes conscientes (regras Extra, permitido pela seção 2 do `regras.md`):** RN-10 (sinal de 30%), RN-11 (consumo só em reserva CHECK-IN), RN-12 (janela do check-in), a auditoria de status e as procedures `registrar_reserva` e `fazer_checkin`. O sinal e o check-in são registrados por INSERT/UPDATE direto, e o trigger garante as regras que dependem deles. Pendente de decisão: o limite de 30 noites da RN-01 (só `saída > entrada` é imposto hoje).
+
 <!-- TODO: ajustar números e regras ao que o professor aprovar no checkpoint 1. Mínimo: 3 regras com número. -->
 
 ### 1.3 Verificação do tema contra a rubrica

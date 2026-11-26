@@ -16,6 +16,7 @@ A recepção controla reservas, hóspedes e cobranças em planilha e papel. Isso
 - **Extra**: regras que enriquecem o projeto. Se o tempo apertar (escopo de cerca de 26 horas), cortem as extras: um modelo pequeno, completo e testado vale mais que um grande pela metade.
 - Toda regra tem número-limite, fronteiras para testar, onde vira código e código de erro.
 - Todo valor de fronteira vira linha em `02_inserts.sql` e teste automatizado.
+- **Estado atual (PostgreSQL):** RN-03, RN-06 (reserva em manutenção) e RN-07 estão no trigger `trg_reserva_validacao`, sem passar por procedure. As procedures `registrar_reserva` e `fazer_checkin` e as regras RN-10, RN-11, RN-12 e a auditoria foram **cortadas** (Extra). Onde as seções abaixo citam essas procedures, leia como escopo cortado.
 
 ## 3. Vocabulário e estados
 

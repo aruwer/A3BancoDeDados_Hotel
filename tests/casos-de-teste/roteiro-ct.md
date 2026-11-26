@@ -74,11 +74,11 @@ Dados de exemplo usados como referência (`02_inserts.sql`): categorias Standard
 |---|---|---|---|
 | RN-01 estadia de 1 a 30 noites | Núcleo | PARCIAL (só `saída > entrada`; falta o máximo de 30) | CT-U01, CT-U02, CT-U03 |
 | RN-02 sem sobreposição de reservas ativas | Núcleo | IMPL (trigger) | CT-U30 a CT-U37, CT-I05, CT-I06, CT-R05 |
-| RN-03 hóspedes de 1 até a capacidade | Núcleo | LACUNA | CT-U40 a CT-U43 |
+| RN-03 hóspedes de 1 até a capacidade | Núcleo | IMPL (trigger `trg_reserva_validacao`, coluna `numero_hospedes`) | CT-U40 a CT-U43 |
 | RN-04 cancelamento e multa | Núcleo | IMPL | CT-U50 a CT-U63, CT-I01, CT-I07 |
 | RN-05 desconto de fidelidade | Extra | IMPL | CT-U70 a CT-U76 |
-| RN-06 quarto em manutenção / check-in só em quarto disponível | Núcleo | LACUNA | CT-U80 a CT-U84 |
-| RN-07 máquina de estados da reserva | Núcleo | LACUNA | CT-U90 a CT-U96 |
+| RN-06 quarto em manutenção / check-in só em quarto disponível | Núcleo | PARCIAL (reserva em MANUTENCAO barrada pelo trigger; check-in só em DISPONIVEL depende de `fazer_checkin`, cortada) | CT-U80 a CT-U84 |
+| RN-07 máquina de estados da reserva | Núcleo | IMPL (trigger `trg_reserva_validacao`) | CT-U90 a CT-U96 |
 | RN-08 late check-out | Núcleo | IMPL | CT-U100 a CT-U108 |
 | RN-09 pagamento cobre o saldo | Núcleo | IMPL | CT-U110 a CT-U115, CT-I02 |
 | RN-10 sinal de 30% | Extra | LACUNA | CT-U120 a CT-U122 |
@@ -427,9 +427,9 @@ Scenario: Atualizar colunas sem relação com a regra
   And a própria linha não conta como conflito de si mesma
 ```
 
-### 3.3 Capacidade de hóspedes (RN-03) · LACUNA
+### 3.3 Capacidade de hóspedes (RN-03) · IMPL
 
-O modelo atual não tem `numero_hospedes` na `reserva`. Os CTs abaixo exigem a coluna e a validação.
+`RESERVA.numero_hospedes` (DEFAULT 1, `ck_reserva_hospedes`) e o trigger `trg_reserva_validacao` (HOTEL-003). Testes em `tests/unit/test_ct_u_trigger_validacao.py`.
 
 **CT-U40 · Hóspedes igual à capacidade é aceito**
 ```gherkin
@@ -649,9 +649,9 @@ Scenario: Arredondamento com desconto
   Then o valor final é arredondado a 2 casas (316,66)
 ```
 
-### 3.6 Manutenção do quarto e check-in (RN-06, RN-12) · LACUNA
+### 3.6 Manutenção do quarto e check-in (RN-06, RN-12) · PARCIAL
 
-O DDL guarda `status_quarto` (DISPONIVEL, OCUPADO, LIMPEZA, MANUTENCAO; antes era o booleano `status_manutencao`), mas `registrar_reserva` e `fazer_checkin` ainda não existem.
+CT-U80 a CT-U82: **IMPL** no trigger `trg_reserva_validacao` (HOTEL-004; só reserva ativa é barrada, quem já está hospedado pode sair). CT-U83 (check-in só em DISPONIVEL) e RN-12 dependem de `fazer_checkin`, que foi **cortada** (regra Extra; o check-in é feito por UPDATE direto, CONFIRMADA para CHECK-IN).
 
 **CT-U80 · Reserva em quarto de manutenção é recusada** · HOTEL-004
 ```gherkin
@@ -681,9 +681,9 @@ O modelo já tem os quatro status (decisão D-02); falta a procedure `fazer_chec
 
 **CT-U84 · Ciclo do quarto** · PARCIAL. OCUPADO para LIMPEZA (check-out) e LIMPEZA para DISPONIVEL (UPDATE de governança) estão cobertos em CT-U107; DISPONIVEL para OCUPADO (check-in) depende de `fazer_checkin`.
 
-### 3.7 Máquina de estados da reserva (RN-07) · LACUNA
+### 3.7 Máquina de estados da reserva (RN-07) · IMPL
 
-Hoje o `UPDATE` direto aceita qualquer troca de status (só o CHECK de domínio protege).
+O trigger `trg_reserva_validacao` recusa com HOTEL-007 qualquer troca fora da sequência, inclusive por `UPDATE` direto. Os testes cobrem as 7 transições válidas e 12 inválidas.
 
 **CT-U90 a CT-U93 · Transições válidas**
 ```gherkin
@@ -1562,9 +1562,9 @@ Ensaiar em rodízio: cada pessoa explica um trecho que não escreveu.
 | # | Lacuna ou divergência | CTs que falham hoje |
 |---|---|---|
 | 1 | Limite de 30 noites (RN-01) sem constraint | CT-U03 |
-| 2 | Capacidade de hóspedes (RN-03) sem coluna nem validação | CT-U40 a CT-U43 |
-| 3 | Quarto em manutenção pode ser reservado (RN-06); o status de quarto já existe, mas falta `registrar_reserva`/`fazer_checkin` para aplicá-lo | CT-U80 a CT-U84 |
-| 4 | Máquina de estados (RN-07) sem trigger; qualquer UPDATE de status passa | CT-U94 a CT-U96 |
+| 2 | ~~Capacidade de hóspedes (RN-03) sem coluna nem validação~~ **Corrigido** | CT-U40 a CT-U43 |
+| 3 | ~~Quarto em manutenção pode ser reservado (RN-06)~~ **Corrigido** no trigger; check-in só em DISPONIVEL depende de `fazer_checkin` (cortada) | CT-U80 a CT-U84 |
+| 4 | ~~Máquina de estados (RN-07) sem trigger~~ **Corrigido** | CT-U94 a CT-U96 |
 | 5 | Sinal de 30% (RN-10) e estorno no cancelamento (tabela 4.1) não são lançados | CT-U61, CT-U62, CT-U120 a CT-U122 |
 | 6 | Consumo sem trigger (RN-11); `valor_total_item` digitado à mão | CT-U131 a CT-U133 |
 | 7 | Check-in (RN-12) sem procedure | CT-U140 a CT-U143 |

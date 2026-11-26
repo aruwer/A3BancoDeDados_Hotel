@@ -45,6 +45,7 @@ CREATE TABLE reserva (
     id_reserva             SERIAL,
     id_hospede             INT           NOT NULL,
     id_quarto              INT           NOT NULL,
+    numero_hospedes        INT           NOT NULL DEFAULT 1,   -- RN-03: de 1 até a capacidade da categoria (trigger trg_reserva_validacao)
     data_reserva           TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
     data_entrada_prevista  DATE          NOT NULL,
     data_saida_prevista    DATE          NOT NULL,
@@ -61,6 +62,7 @@ CREATE TABLE reserva (
     CONSTRAINT fk_reserva_quarto FOREIGN KEY (id_quarto)
         REFERENCES quarto(id_quarto) ON DELETE RESTRICT,
     CONSTRAINT ck_reserva_datas CHECK (data_saida_prevista > data_entrada_prevista),
+    CONSTRAINT ck_reserva_hospedes CHECK (numero_hospedes > 0),
     CONSTRAINT ck_reserva_checkout CHECK (data_checkout_real >= data_checkin_real),
     CONSTRAINT ck_reserva_desconto CHECK (percentual_desconto BETWEEN 0 AND 100),
     CONSTRAINT ck_reserva_valor_bruto CHECK (valor_total_bruto >= 0),

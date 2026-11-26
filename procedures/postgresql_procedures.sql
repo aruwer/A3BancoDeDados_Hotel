@@ -9,6 +9,7 @@
 --   1) cancelar_reserva(...)  procedure  RN-04 (multa por faixa de dias; NO-SHOW; estorno do sinal) altera RESERVA, CANCELAMENTO e PAGAMENTO
 --   2) fazer_checkout(...)    procedure  RN-05, RN-08, RN-09 (fidelidade, late check-out, pagamento) altera RESERVA, QUARTO e PAGAMENTO
 --   3) trg_reserva_sobreposicao  trigger  RN-02 (anti-overbooking, vale para INSERT/UPDATE direto)
+--   4) trg_reserva_validacao     trigger  RN-03 (capacidade), RN-06 (quarto em manutenção), RN-07 (transições de status)
 --
 -- Códigos de erro de negócio (formato do projeto, regras.md seção 6; todos com ERRCODE 'P0001'):
 --   HOTEL-001 parâmetro inválido (nulo, negativo)        HOTEL-007 transição de status inválida
@@ -392,3 +393,81 @@ DROP TRIGGER IF EXISTS trg_reserva_sobreposicao ON reserva;
 CREATE TRIGGER trg_reserva_sobreposicao
 BEFORE INSERT OR UPDATE ON reserva
 FOR EACH ROW EXECUTE FUNCTION fn_reserva_sobreposicao();
+
+
+-- ---------------------------------------------------------------------------------------------
+-- Trigger: trg_reserva_validacao  (função fn_reserva_validacao)
+--
+-- Regras implementadas (vale para INSERT e UPDATE diretos, sem depender de procedure):
+--   RN-03 (HOTEL-003): numero_hospedes de 1 até capacidade_maxima da categoria do quarto.
+--         Confere no INSERT e quando muda o número de hóspedes ou o quarto.
+--   RN-06 (HOTEL-004): reserva ativa (PENDENTE, CONFIRMADA, CHECK-IN) não pode ficar em quarto em
+--         MANUTENCAO. Confere no INSERT, quando a reserva muda de quarto ou quando passa a ficar ativa.
+--         Não confere quando só outras colunas mudam, nem no check-out: o hóspede que já está no
+--         quarto pode sair mesmo que o quarto tenha entrado em manutenção (ver fazer_checkout).
+--   RN-07 (HOTEL-007): o status só muda pela sequência
+--           PENDENTE   -> CONFIRMADA | CANCELADA | NO-SHOW
+--           CONFIRMADA -> CHECK-IN   | CANCELADA | NO-SHOW
+--           CHECK-IN   -> CHECK-OUT
+--         CHECK-OUT, CANCELADA e NO-SHOW são estados finais. Repetir o mesmo status não é transição.
+--
+-- Ordem dos triggers BEFORE (alfabética): trg_reserva_sobreposicao roda antes deste; se as datas
+-- conflitam, o erro é HOTEL-005.
+-- Fora do escopo (regras Extra cortadas): RN-12 (janela do check-in) e a exigência de quarto
+-- DISPONIVEL no check-in, que dependem da procedure fazer_checkin.
+-- ---------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_reserva_validacao() RETURNS TRIGGER AS $$
+DECLARE
+    v_capacidade    INTEGER;
+    v_status_quarto VARCHAR(20);
+BEGIN
+    -- RN-07: transição de status.
+    IF TG_OP = 'UPDATE' AND NEW.status_reserva IS DISTINCT FROM OLD.status_reserva THEN
+        IF (OLD.status_reserva, NEW.status_reserva) NOT IN (
+               ('PENDENTE',   'CONFIRMADA'), ('PENDENTE',   'CANCELADA'), ('PENDENTE',   'NO-SHOW'),
+               ('CONFIRMADA', 'CHECK-IN'),   ('CONFIRMADA', 'CANCELADA'), ('CONFIRMADA', 'NO-SHOW'),
+               ('CHECK-IN',   'CHECK-OUT')) THEN
+            RAISE EXCEPTION 'HOTEL-007: transição de status inválida na reserva %: % -> %',
+                NEW.id_reserva, OLD.status_reserva, NEW.status_reserva USING ERRCODE = 'P0001';
+        END IF;
+    END IF;
+
+    -- RN-03: número de hóspedes x capacidade do quarto.
+    IF TG_OP = 'INSERT'
+       OR NEW.numero_hospedes IS DISTINCT FROM OLD.numero_hospedes
+       OR NEW.id_quarto       IS DISTINCT FROM OLD.id_quarto THEN
+        SELECT c.capacidade_maxima INTO v_capacidade
+        FROM quarto q
+        JOIN categoria_quarto c ON c.id_categoria = q.id_categoria
+        WHERE q.id_quarto = NEW.id_quarto;
+
+        -- Quarto inexistente: a FK fk_reserva_quarto recusa.
+        IF FOUND AND (NEW.numero_hospedes < 1 OR NEW.numero_hospedes > v_capacidade) THEN
+            RAISE EXCEPTION 'HOTEL-003: % hóspede(s) no quarto %: o permitido é de 1 a %',
+                NEW.numero_hospedes, NEW.id_quarto, v_capacidade USING ERRCODE = 'P0001';
+        END IF;
+    END IF;
+
+    -- RN-06: reserva ativa não pode ficar em quarto em manutenção.
+    IF NEW.status_reserva IN ('PENDENTE', 'CONFIRMADA', 'CHECK-IN')
+       AND (TG_OP = 'INSERT'
+            OR NEW.id_quarto IS DISTINCT FROM OLD.id_quarto
+            OR OLD.status_reserva NOT IN ('PENDENTE', 'CONFIRMADA', 'CHECK-IN')) THEN
+        SELECT q.status_quarto INTO v_status_quarto
+        FROM quarto q
+        WHERE q.id_quarto = NEW.id_quarto;
+
+        IF v_status_quarto = 'MANUTENCAO' THEN
+            RAISE EXCEPTION 'HOTEL-004: o quarto % está em manutenção e não pode ser reservado',
+                NEW.id_quarto USING ERRCODE = 'P0001';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_reserva_validacao ON reserva;
+CREATE TRIGGER trg_reserva_validacao
+BEFORE INSERT OR UPDATE ON reserva
+FOR EACH ROW EXECUTE FUNCTION fn_reserva_validacao();

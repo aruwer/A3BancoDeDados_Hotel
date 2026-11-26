@@ -41,6 +41,7 @@ entity "Reserva" as reserva {
   --
   * id_hospede : int <<FK>>
   * id_quarto : int <<FK>>
+  * numero_hospedes : int <<CHECK: > 0, até a capacidade da categoria>>
   * data_reserva : timestamp
   * data_entrada_prevista : date
   * data_saida_prevista : date
