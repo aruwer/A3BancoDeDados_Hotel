@@ -1,4 +1,4 @@
-﻿import os
+import os
 from decimal import Decimal
 import psycopg
 from psycopg.errors import RaiseException
@@ -37,28 +37,64 @@ def consultar_reservas(conn, status_filtro: str):
             )
 
 
-def caminho_feliz_checkout(conn, id_reserva: int, valor_pago: Decimal):
-    """Requisito 2: Chamada de procedure com decimal.Decimal e confirmação via commit()."""
-    print(f"\n--- [2] Executando Procedure fazer_checkout (Reserva #{id_reserva}) no Caminho Feliz ---")
+def caminho_feliz_checkout(conn, valor_pago: Decimal):
+    """Requisito 2: Chamada de procedure com decimal.Decimal em transação isolada (idempotente)."""
+    print("\n--- [2] Executando Procedure fazer_checkout no Caminho Feliz (Transação Isolada) ---")
     try:
         with conn.cursor() as cur:
+            # Insere uma reserva própria em CHECK-IN na mesma transação (datas futuras evitam sobreposição)
+            cur.execute(
+                """
+                INSERT INTO Reserva (
+                    id_hospede, id_quarto, data_entrada_prevista, data_saida_prevista,
+                    data_checkin_real, status_reserva, valor_total_bruto, percentual_desconto
+                )
+                VALUES (
+                    (SELECT MIN(id_hospede) FROM Hospede),
+                    (SELECT MIN(id_quarto) FROM Quarto WHERE status_manutencao = FALSE),
+                    DATE '2099-01-10',
+                    DATE '2099-01-13',
+                    TIMESTAMP '2099-01-10 14:00:00',
+                    'CHECK-IN',
+                    %s,
+                    0
+                )
+                RETURNING id_reserva;
+                """,
+                (valor_pago,),
+            )
+            id_reserva_demo = cur.fetchone()[0]
+
             # Valor monetário passado estritamente como decimal.Decimal (nunca float)
             cur.execute(
                 "CALL fazer_checkout(%s, %s);",
-                (id_reserva, valor_pago),
+                (id_reserva_demo, valor_pago),
+            )
+
+            # Verifica o resultado da procedure antes de reverter a transação de demonstração
+            cur.execute(
+                "SELECT status_reserva, valor_final_pago FROM Reserva WHERE id_reserva = %s;",
+                (id_reserva_demo,),
+            )
+            status_atual, valor_final = cur.fetchone()
+            print(
+                f"Sucesso! Check-out da Reserva #{id_reserva_demo} validado "
+                f"(status='{status_atual}', valor_final_pago=R$ {valor_final})."
+            )
+    except RaiseException as exc:
+        msg = exc.diag.message_primary or str(exc)
+        print(f"[Aviso de Negócio no Caminho Feliz]: {msg}")
+    except Exception as exc:
+        print(f"Erro inesperado no caminho feliz: {exc}")
+    finally:
+        # Reverte a demonstração e restaura a sequence para não sujar o banco para os testes
+        conn.rollback()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT setval(pg_get_serial_sequence('reserva', 'id_reserva'), COALESCE(MAX(id_reserva), 1)) FROM reserva;"
             )
         conn.commit()
-        print(
-            f"Sucesso! Check-out da Reserva #{id_reserva} concluído com pagamento de "
-            f"R$ {valor_pago} -> Transação confirmada (COMMIT)."
-        )
-    except RaiseException as exc:
-        conn.rollback()
-        msg = exc.diag.message_primary or str(exc)
-        print(f"[Aviso de Negócio no Caminho Feliz]: {msg} -> ROLLBACK executado.")
-    except Exception as exc:
-        conn.rollback()
-        print(f"Erro inesperado no caminho feliz: {exc}")
+        print("Estado do banco preservado (ROLLBACK da demonstração executado).")
 
 
 def erro_negocio_checkout(conn, id_reserva: int, valor_pago: Decimal):
@@ -87,11 +123,9 @@ def main():
         # 1. Consulta com bind (%s)
         consultar_reservas(conn, "CONFIRMADA")
 
-        # 2. Procedure no caminho feliz usando decimal.Decimal e conn.commit()
-        # (Reserva #10 está com status CHECK-IN e valor bruto 1200.00)
+        # 2. Procedure no caminho feliz usando decimal.Decimal e reserva isolada
         caminho_feliz_checkout(
             conn=conn,
-            id_reserva=10,
             valor_pago=Decimal("1200.00"),
         )
 
