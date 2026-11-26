@@ -7,7 +7,7 @@
 -- Mapeamento para o modelo atual (o texto das perguntas usa nomes do modelo antigo):
 --   estadia concluída = status_reserva 'CHECK-OUT' (FINALIZADA no regras.md)
 --   reserva ativa     = qualquer status exceto 'CANCELADA' e 'NO-SHOW'
---   tipo de quarto    = Categoria_Quarto
+--   tipo de quarto    = categoria_quarto
 --   gasto/receita da estadia = valor_final_pago (diárias + consumos)
 -- Os resultados esperados foram calculados à mão a partir do 02_inserts.sql.
 -- Valores monetários em R$; "hoje" = CURRENT_DATE.
@@ -41,11 +41,14 @@ ORDER BY receita_diarias DESC;
 -- Pergunta: Quais reservas confirmadas têm check-in nos próximos 7 dias, com o nome
 --   do hóspede, o quarto, a categoria e o número de noites, em ordem de chegada?
 -- Janela: de hoje até hoje + 7, inclusive nos dois extremos.
--- Resultado esperado (1 linha):
+-- Resultado esperado (2 linhas, em ordem de chegada):
 --   reserva 12 | Carlos Eduardo Menezes | quarto 201 | Superior | entrada hoje + 5 | 3 noites
+--   reserva 19 | Fernanda Rocha Almeida | quarto 102 | Standard | entrada hoje + 7 | 1 noite
+-- A reserva 19 prova o limite superior da janela: entra com check-in exatamente em hoje + 7.
 -- Ficam de fora:
---   a reserva 11 (CONFIRMADA, entrada hoje + 10, depois da janela) e as reservas 13 a 16
---   (CANCELADAS, entradas em hoje + 7, + 6, + 2 e + 1, dentro da janela).
+--   a reserva 20 (CONFIRMADA, entrada hoje + 8, um dia depois da janela), a reserva 11
+--   (CONFIRMADA, entrada hoje + 10) e as reservas 13 a 16 (CANCELADAS, entradas em
+--   hoje + 7, + 6, + 2 e + 1, dentro da janela).
 SELECT r.id_reserva,
        h.nome_completo,
        q.numero_quarto,
@@ -99,14 +102,17 @@ ORDER BY posicao, nome_completo;
 --   ou seja, não têm nenhuma reserva ativa que se sobreponha a esse período?
 -- Período testado: X = hoje + 8 e Y = hoje + 10. Quarto em manutenção fica fora.
 -- Sobreposição: entrada_existente < Y e saida_existente > X (intervalo [entrada, saída)).
--- Resultado esperado (6 linhas):
+-- Resultado esperado (5 linhas):
 --   101 Standard (andar 1) | 102 Standard (1) | 201 Superior (2) |
---   202 Superior (2) | 301 Suíte (3) | 302 Suíte (3)
+--   301 Suíte (3) | 302 Suíte (3)
 -- O quarto 103 não aparece (manutenção). Os limites ficam provados assim:
 --   quarto 201: a reserva 12 sai exatamente em X (hoje + 8) e não bloqueia;
+--   quarto 102: a reserva 19 sai exatamente em X (hoje + 8) e não bloqueia;
 --   quarto 101: a reserva 11 entra exatamente em Y (hoje + 10) e não bloqueia;
---   quarto 301: a reserva 13 se sobrepõe ao período, mas está CANCELADA e não bloqueia.
--- Para ver um quarto bloqueado, use X = hoje + 6 e Y = hoje + 9: o 201 sai da lista.
+--   quarto 301: a reserva 13 se sobrepõe ao período, mas está CANCELADA e não bloqueia;
+--   quarto 202: a reserva 20 (CONFIRMADA, hoje + 8 a hoje + 9) está dentro do período e
+--   bloqueia, por isso o 202 sai da lista.
+-- Para bloquear também o 201, use X = hoje + 6 e Y = hoje + 9.
 WITH periodo AS (
     SELECT CURRENT_DATE + 8  AS x,
            CURRENT_DATE + 10 AS y
