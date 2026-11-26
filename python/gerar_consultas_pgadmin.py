@@ -5,7 +5,7 @@ Por que existe: o pgAdmin so mostra a grade do ULTIMO comando de um script. Este
 para que as 10 saiam numa grade unica (uma linha de texto JSON por linha de resultado, mais uma linha "linhas: N" por consulta).
 A fonte da verdade continua sendo 03_consultas.sql (e o que os testes e a aplicacao leem). Nao edite o arquivo gerado.
 
-Uso (na raiz do repositorio):  python scripts/gerar_consultas_pgadmin.py
+Uso (na raiz do repositorio):  python python/gerar_consultas_pgadmin.py
 """
 import re
 from pathlib import Path
@@ -44,7 +44,7 @@ def main():
         partes.append(f"SELECT '{nome}' AS consulta, 0::bigint AS ordem, 'linhas: ' || count(*) AS linha\n  FROM (\n{sql}\n  ) c")
         partes.append(f"SELECT '{nome}', row_number() OVER (), to_json(q)::text\n  FROM (\n{sql}\n  ) q")
     cab = (
-        "-- GERADO por scripts/gerar_consultas_pgadmin.py a partir de postgresql/03_consultas.sql. NAO EDITE A MAO.\n"
+        "-- GERADO por python/gerar_consultas_pgadmin.py a partir de postgresql/03_consultas.sql. NAO EDITE A MAO.\n"
         "-- Copie TUDO, cole no Query Tool do pgAdmin e execute uma vez (F5): as consultas saem numa grade so.\n"
         "-- Cada consulta tem uma linha 'linhas: N' (ordem 0) e depois uma linha por resultado (texto JSON, na ordem da consulta).\n"
         "-- Compare com os 'Resultado esperado' dos comentarios de 03_consultas.sql.\n"

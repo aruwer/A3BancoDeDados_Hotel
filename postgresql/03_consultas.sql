@@ -1,6 +1,6 @@
 -- 03_consultas.sql
 -- Banco de Dados: PostgreSQL 17
--- Consultas de negócio Q01 a Q05 (perguntas em perguntas_de_negocio.md).
+-- Consultas de negócio Q01 a Q10 (perguntas em perguntas_de_negocio.md).
 -- Rodar depois do 01_ddl.sql e do 02_inserts.sql:
 --   psql -U hotel -d hotel -f postgresql/03_consultas.sql
 --
@@ -20,7 +20,7 @@
 -- Resultado esperado (3 linhas, nesta ordem):
 --   Suíte    | 2 estadias | 3500.00   (reservas 3 e 4: 1500 + 2000)
 --   Superior | 3 estadias | 2700.00   (reservas 1, 6 e 8: 900 + 1200 + 600)
---   Standard | 4 estadias | 2000.00   (reservas 2, 5, 7 e 9: 400 + 600 + 600 + 400)
+--   Standard | 5 estadias | 2200.00   (reservas 2, 5, 7, 9 e 21: 400 + 600 + 600 + 400 + 200)
 -- A reserva 10 (CHECK-IN, Superior) não entra: a estadia ainda não foi concluída.
 SELECT c.nome_categoria,
        COUNT(*) AS estadias_concluidas,
@@ -41,11 +41,12 @@ ORDER BY receita_diarias DESC;
 -- Pergunta: Quais reservas confirmadas têm check-in nos próximos 7 dias, com o nome
 --   do hóspede, o quarto, a categoria e o número de noites, em ordem de chegada?
 -- Janela: de hoje até hoje + 7, inclusive nos dois extremos.
--- Resultado esperado (1 linha):
+-- Resultado esperado (2 linhas):
 --   reserva 12 | Carlos Eduardo Menezes | quarto 201 | Superior | entrada hoje + 5 | 3 noites
+--   reserva 19 | Fernanda Rocha Almeida | quarto 102 | Standard | entrada hoje + 7 | 1 noite (último dia da janela)
 -- Ficam de fora:
---   a reserva 11 (CONFIRMADA, entrada hoje + 10, depois da janela) e as reservas 13 a 16
---   (CANCELADAS, entradas em hoje + 7, + 6, + 2 e + 1, dentro da janela).
+--   as reservas 11 e 20 (CONFIRMADAS, entradas em hoje + 10 e hoje + 8, depois da janela) e as
+--   reservas 13 a 16 (CANCELADAS, entradas em hoje + 7, + 6, + 2 e + 1, dentro da janela).
 SELECT r.id_reserva,
        h.nome_completo,
        q.numero_quarto,
@@ -99,10 +100,10 @@ ORDER BY posicao, nome_completo;
 --   ou seja, não têm nenhuma reserva ativa que se sobreponha a esse período?
 -- Período testado: X = hoje + 8 e Y = hoje + 10. Quarto em manutenção fica fora.
 -- Sobreposição: entrada_existente < Y e saida_existente > X (intervalo [entrada, saída)).
--- Resultado esperado (6 linhas):
---   101 Standard (andar 1) | 102 Standard (1) | 201 Superior (2) |
---   202 Superior (2) | 301 Suíte (3) | 302 Suíte (3)
--- O quarto 103 não aparece (manutenção). Os limites ficam provados assim:
+-- Resultado esperado (5 linhas):
+--   101 Standard (andar 1) | 102 Standard (1) | 201 Superior (2) | 301 Suíte (3) | 302 Suíte (3)
+-- O quarto 103 não aparece (manutenção) e o 202 também não: a reserva 20 (CONFIRMADA, de
+--   hoje + 8 a hoje + 9) cai dentro do período. Os limites ficam provados assim:
 --   quarto 201: a reserva 12 sai exatamente em X (hoje + 8) e não bloqueia;
 --   quarto 101: a reserva 11 entra exatamente em Y (hoje + 10) e não bloqueia;
 --   quarto 301: a reserva 13 se sobrepõe ao período, mas está CANCELADA e não bloqueia.
@@ -117,7 +118,7 @@ SELECT q.numero_quarto,
 FROM quarto q
 JOIN categoria_quarto c ON c.id_categoria = q.id_categoria
 CROSS JOIN periodo p
-WHERE NOT q.status_manutencao
+WHERE q.status_quarto <> 'MANUTENCAO'
   AND NOT EXISTS (
       SELECT 1
       FROM reserva r
@@ -136,11 +137,12 @@ ORDER BY q.numero_quarto;
 --   receita. O acumulado reinicia a cada ano.
 -- Resultado esperado: a divisão por mês depende do dia em que a consulta roda, porque as
 --   datas do 02_inserts.sql são relativas a hoje. Para uma execução em 16/11/2026:
---   2026-09 |  2420.00 |  2420.00   (reserva 4)
---   2026-10 |  4400.00 |  6820.00   (reservas 1, 2, 3 e 6: 1080 + 470 + 1650 + 1200)
---   2026-11 |  2600.00 |  9420.00   (reservas 5, 7, 8 e 9: 600 + 800 + 800 + 400)
--- Em qualquer dia, a soma de receita_mes é 9420.00 e o último acumulado do ano chega a
---   9420.00 (se as estadias não cruzarem a virada do ano).
+--   2026-07 |   675.00 |   675.00   (reserva 21, que sai em hoje - 119)
+--   2026-10 |  5150.00 |  5825.00   (reservas 1, 3 e 4: 1080 + 1650 + 2420)
+--   2026-11 |  4270.00 | 10095.00   (reservas 2, 5, 6, 7, 8 e 9: 470 + 600 + 1200 + 800 + 800 + 400)
+--   (exemplo para uma execução em 26/11/2026; os meses sem receita não aparecem)
+-- Em qualquer dia, a soma de receita_mes é 10095.00 e o último acumulado do ano chega a
+--   10095.00 (se as estadias não cruzarem a virada do ano).
 SELECT TO_CHAR(mes, 'YYYY-MM') AS mes,
        receita_mes,
        SUM(receita_mes) OVER (
@@ -167,8 +169,8 @@ ORDER BY mes;
 --   nesta carga; para provar o "acima de", acrescente reservas (por exemplo, Standard com 10 reservas e 2 canceladas).
 -- Resultado esperado (calculado a partir do 02_inserts.sql; conferir rodando no psql):
 --   Suíte    | 3 | 1 | 33.3   (reserva 13 cancelada, de 3: 3, 4 e 13)
---   Standard | 8 | 2 | 25.0   (reservas 15 e 16 canceladas, de 8: 2, 5, 7, 9, 11, 15, 16 e 17; a 17 é NO-SHOW e não conta)
---   Superior (7 reservas, 1 cancelada = 14.3) NÃO aparece.
+--   Standard (10 reservas, 2 canceladas = 20.0 exato; a 17 é NO-SHOW e não conta) NÃO aparece: é "acima de 20%".
+--   Superior (8 reservas, 1 cancelada = 12.5) NÃO aparece.
 SELECT c.nome_categoria,
        COUNT(*) AS total_reservas,
        COUNT(*) FILTER (WHERE r.status_reserva = 'CANCELADA') AS canceladas,
@@ -187,13 +189,15 @@ ORDER BY taxa_cancelamento DESC, c.nome_categoria;
 -- Fronteira nos dados: nesta carga nenhum serviço está empatado e todos foram consumidos; o LEFT JOIN e o 0 por cento só se provam com um serviço sem consumo.
 -- Receita de consumo = soma de valor_total_item (quantidade x preço copiado no lançamento).
 -- Resultado esperado (calculado a partir do 02_inserts.sql; conferir rodando no psql):
---   Jantar         | 540.00 | 40.4
---   Spa            | 450.00 | 33.7
---   Café da manhã  | 210.00 | 15.7
---   Frigobar       |  50.00 |  3.7
---   Lavanderia     |  45.00 |  3.4
---   Estacionamento |  40.00 |  3.0
--- Total = 1335.00. Os percentuais arredondados somam 99.9 (arredondamento): no teste, confira a soma da receita, não a dos percentuais.
+--   Jantar              | 630.00 | 34.8
+--   Spa                 | 600.00 | 33.1
+--   Café da manhã       | 245.00 | 13.5
+--   Lavanderia          |  90.00 |  5.0   (empata com o Translado; desempate por nome)
+--   Translado aeroporto |  90.00 |  5.0
+--   Estacionamento      |  80.00 |  4.4
+--   Frigobar            |  75.00 |  4.1
+--   Passeio turístico   |   0.00 |  0.0   (nunca consumido)
+-- Total = 1810.00. Os percentuais arredondados somam 99.9 (arredondamento): no teste, confira a soma da receita, não a dos percentuais.
 WITH receita_servico AS (
     SELECT s.id_servico,
            s.nome_servico,
@@ -223,6 +227,7 @@ ORDER BY receita DESC, nome_servico;
 --   Ana Beatriz Souza Lima | 101 | Standard | hoje-20 | hoje-18 |  470.00 | 18
 --   Fernanda Rocha Almeida | 202 | Superior | hoje-25 | hoje-21 | 1200.00 | 21
 --   João Pedro Vasconcelos | 301 | Suíte    | hoje-60 | hoje-56 | 2420.00 | 56
+--   Larissa Mendes Carvalho | 101 | Standard | hoje-120 | hoje-119 | 675.00 | 119
 SELECT t.nome_completo,
        q.numero_quarto,
        c.nome_categoria,
@@ -253,8 +258,8 @@ ORDER BY t.data_saida_prevista DESC, t.nome_completo;
 -- Pergunta: Quais hóspedes já consumiram todos os serviços do catálogo?
 -- Como não há coluna 'categoria' em Servico, considera-se TODOS os serviços cadastrados.
 -- Fronteira nos dados: Ricardo usou 3 dos 6 serviços (Café da manhã, Jantar e Estacionamento): é o mais próximo, e não entra.
--- Resultado esperado (calculado a partir do 02_inserts.sql; conferir rodando no psql): 0 linhas (ninguém usou os 6 serviços).
---   Para a consulta provar algo, acrescente um hóspede que consumiu os 6 serviços e outro que consumiu 5.
+-- Resultado esperado (calculado a partir do 02_inserts.sql; conferir rodando no psql): 0 linhas: a Larissa usou 7 dos 8 serviços (falta o Passeio turístico).
+--   Para a consulta provar algo, acrescente um hóspede que consumiu os 8 serviços.
 SELECT h.id_hospede, h.nome_completo
 FROM Hospede h
 WHERE EXISTS (SELECT 1 FROM Servico)
@@ -281,16 +286,16 @@ ORDER BY h.nome_completo;
 -- Grupo sem reservas não gera linha no GROUP BY: não existem linhas com 0 reservas.
 -- Resultado esperado (calculado a partir do 02_inserts.sql; conferir rodando no psql):
 --   Standard    | CANCELADA | 2 |   300.00
---   Standard    | CHECK-OUT | 4 |  2270.00
+--   Standard    | CHECK-OUT | 5 |  2945.00
 --   Standard    | NO-SHOW   | 1 |   200.00
---   Standard    | SUBTOTAL  | 7 |  2770.00
+--   Standard    | SUBTOTAL  | 8 |  3445.00
 --   Superior    | CANCELADA | 1 |   150.00
 --   Superior    | CHECK-OUT | 3 |  3080.00
 --   Superior    | SUBTOTAL  | 4 |  3230.00
 --   Suíte       | CANCELADA | 1 |     0.00
 --   Suíte       | CHECK-OUT | 2 |  4070.00
 --   Suíte       | SUBTOTAL  | 3 |  4070.00
---   TOTAL GERAL |           |14 | 10070.00
+--   TOTAL GERAL |           |15 | 10745.00
 SELECT CASE WHEN GROUPING(c.nome_categoria) = 1 THEN 'TOTAL GERAL' ELSE c.nome_categoria END AS categoria_quarto,
        CASE
            WHEN GROUPING(c.nome_categoria) = 1 THEN ''

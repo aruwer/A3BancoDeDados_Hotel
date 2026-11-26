@@ -4,7 +4,9 @@ Escrito para: o desenvolvedor responsável por cada arquivo (banco, consultas, D
 
 Origem: execução da suíte `tests/unit/` (pytest + psycopg) contra um PostgreSQL 17.12 criado do zero com `01_ddl.sql`, `02_inserts.sql`, `postgresql_procedures.sql` e `04_indices.sql`, na `main` já com as PRs #27, #29 e #30. Os testes seguem os requisitos (`A3_Projeto_BD.html` e `regras.md`), não o código.
 
-**Resultado atual (2026-11-25, após os commits `a89d648`, `cfa7a5e`, `dc1ad8f` e `f97e2a7` de João): 180 testes, 180 passam.** Na primeira execução (sobre a `main`) eram 178 passando e 2 falhando de propósito (`xfail(strict=True)`, BUG-01 e BUG-02). João corrigiu os dois; as marcas `xfail` foram removidas e o extrator de consultas de `test_ct_u_consultas.py` foi adaptado ao novo formato do `03_consultas.sql` (blocos `-- @Qnn`). Ficam abertos os problemas achados fora da suíte, em execução manual (seção 2).
+**Atualização (2026-11-26): 278 testes, 278 passam, na integração dos PRs #32 e #33 (seção 7).**
+
+**Resultado em 2026-11-25 ( após os commits `a89d648`, `cfa7a5e`, `dc1ad8f` e `f97e2a7` de João): 180 testes, 180 passam.** Na primeira execução (sobre a `main`) eram 178 passando e 2 falhando de propósito (`xfail(strict=True)`, BUG-01 e BUG-02). João corrigiu os dois; as marcas `xfail` foram removidas e o extrator de consultas de `test_ct_u_consultas.py` foi adaptado ao novo formato do `03_consultas.sql` (blocos `-- @Qnn`). Ficam abertos os problemas achados fora da suíte, em execução manual (seção 2).
 
 | Id | Situação |
 |---|---|
@@ -14,7 +16,9 @@ Origem: execução da suíte `tests/unit/` (pytest + psycopg) contra um PostgreS
 | P-04 | **Resolvido** (PR #31, `f91fe0c` + `ab8a272`): a demo é repetível e o caminho feliz funciona |
 | P-05 | **Resolvido** (PR #31) |
 | P-06 | **Resolvido** (verificado pelo compose: 180 passando; ver nota sobre CRLF em clones antigos) |
-| P-07 e P-08 | Abertos |
+| P-07 | **Resolvido** (PR #33, Yuri): o cabeçalho do `02_inserts.sql` usa os nomes reais |
+| P-08 | **Resolvido** (PR #33, Yuri): fronteiras F1 a F8 nos dados; os testes das consultas foram recalculados à mão |
+| Integração PR #32 + #33 | **Resolvida** na branch `integracao-teste` (ver seção 7) |
 | Caminho do `AGENTS.md` | **Resolvido** (PR #31) |
 
 Cada problema tem: onde está, evidência, impacto na nota ou na regra, correção sugerida e CT afetado. A correção é sugestão: quem decide e valida é o grupo (AGENTS.md).
@@ -32,7 +36,7 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
 - **Impacto:** a rubrica (critério 3, 10 pontos) diz "10 consultas, resultado conferido". Hoje são 9. Como `03_consultas.sql` é uma única instrução com `UNION ALL`, **uma consulta quebrada derruba o arquivo inteiro**: rodar o arquivo no `psql` ou no pgAdmin não devolve nenhum resultado.
 - **Correção sugerida:** no `SELECT` externo da Q08, trocar `r.data_entrada_prevista`, `r.data_saida_prevista` e `r.valor_final_pago` por `t.`, e `CURRENT_DATE - r.data_saida_prevista` por `CURRENT_DATE - t.data_saida_prevista`.
 - **Verificação feita:** com essa troca a Q08 devolve 7 linhas, idênticas ao valor calculado à mão no teste (Luciana 4 dias, Mariana 7, Ricardo 10, Carlos 12, Ana 18, Fernanda 21, João 56).
-- **CT:** CT-U177 (`test_ct_u177_q08_ultima_estadia_de_cada_hospede`, marcado BUG-01).
+- **CT:** CT-U177 (`test_ct_u177_q08_ultima_estadia_de_cada_hospede`, antes marcado BUG-01, agora passa).
 
 ### P-02 · `03_consultas.sql` foi substituído por um arquivo gerado e perdeu o conteúdo · Gravidade alta · RESOLVIDO
 
@@ -46,7 +50,7 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
 - **Impacto:** o enunciado exige "cada consulta com o objetivo em um comentário" e "resultado conferido por um teste com o valor esperado calculado à mão". Hoje o valor esperado só existe nos testes novos. Na defesa oral, o professor abre o arquivo e vê SQL de máquina.
 - **Contexto no histórico:** o `docs/Log-IA-Joao` (linha 7 do resumo da conversa) diz que um gerador das 10 consultas para o pgAdmin foi criado; ele provavelmente está só na máquina de quem o escreveu e não foi commitado.
 - **Correção sugerida:** restaurar a versão com comentários (`git show 2ef6357:postgresql/03_consultas.sql`), aplicar a correção do P-01 e, se o grupo quiser o formato para pgAdmin, manter o gerador e a saída em outro caminho (por exemplo `scripts/` e `performance/`), nunca no lugar do arquivo oficial.
-- **CT:** CT-U181 (`test_ct_u181_cada_consulta_tem_objetivo_em_comentario`, marcado BUG-02).
+- **CT:** CT-U181 (`test_ct_u181_cada_consulta_tem_objetivo_em_comentario`, antes marcado BUG-02, agora passa).
 - **Contraprova positiva:** as outras 9 consultas (Q01 a Q07, Q09 e Q10) devolvem exatamente os valores calculados à mão (CT-U170 a CT-U179), então a lógica delas está correta. O problema é de organização e de Q08.
 
 ---
@@ -104,26 +108,23 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
   2. decidir se os dois `.sql` de `tests/` (que já existiam) entram na verificação automatizada (CT-I17);
   3. (P-04, resolvido no PR #31: a demo não suja mais o banco, então a ordem `app` e `testes` não importa)
 
-### P-07 · Comentário do `02_inserts.sql` cita nomes que não existem nos dados · Gravidade baixa
+### P-07 · Comentário do `02_inserts.sql` cita nomes que não existem nos dados · Gravidade baixa · RESOLVIDO
 
-- **Onde:** `postgresql/02_inserts.sql`, linhas de cabeçalho `F1` e "Totais gastos".
-- **Evidência:** o comentário lista "Diego 2420,00 | Bruno 2250,00 | Elisa 800,00 = Fábio 800,00 | Gabriela 400,00" e fala em "Luciana em 7º", mas os hóspedes inseridos são Ana, Carlos, Fernanda, João, Mariana, Ricardo, Luciana e Gabriel. Os valores batem; os nomes não.
-- **Impacto:** quem conferir o ranking à mão usando o comentário se confunde.
-- **Correção sugerida:** trocar os nomes do comentário pelos reais (João 2420, Carlos 2250, Ana 1550, Fernanda 1200, Mariana 800 = Ricardo 800, Luciana 400).
+PR #33 (Yuri): o cabeçalho agora lista os hóspedes reais (João 2420, Carlos 2250, Ana 1550, Fernanda 1200, Mariana 800 = Ricardo 800, Larissa 675, Luciana 400).
 
-### P-08 · Dados de fronteira previstos no planejamento que os inserts não trazem · Gravidade baixa
+### P-08 · Dados de fronteira previstos no planejamento que os inserts não trazem · Gravidade baixa · RESOLVIDO
 
-Os testes das consultas passam, mas **não provam** estas fronteiras porque os dados não as contêm (checklist de `perguntas_de_negocio.md`):
+PR #33 (Yuri) acrescentou as fronteiras (F1 a F8 no cabeçalho do `02_inserts.sql`) e os testes das consultas foram recalculados à mão (não copiados da saída) sobre os dados novos:
 
-| Consulta | Fronteira prevista | O que existe hoje |
+| Consulta | Fronteira | Como ficou |
 |---|---|---|
-| Q02 | reserva CONFIRMADA em exatamente D+7 (entra) e em D+8 (fica fora) | só D+5 (entra) e D+10 (fora); a reserva 13, em D+7, está CANCELADA |
-| Q06 | categoria com taxa exatamente 20% (não entra) | taxas de 25%, 33,3% e 14,3% |
-| Q07 | serviço nunca consumido (0%) e empate de valor | todos os serviços têm consumo, sem empate |
-| Q09 | hóspede que usou todos menos um | ninguém chega perto; o resultado é vazio |
-| Q05 | mês sem receita e estadia que cruza a virada de mês | depende do dia em que se executa |
+| Q02 | D+7 entra, D+8 fica fora | reservas 19 (D+7, entra) e 20 (D+8, fora) |
+| Q06 | taxa exatamente 20% não entra | Standard com 2 de 10 canceladas; só a Suíte (33,3%) aparece |
+| Q07 | serviço nunca consumido e empate | Passeio turístico com 0%; Lavanderia e Translado empatam em 90,00 |
+| Q09 | hóspede que usou todos menos um | Larissa usou 7 de 8; o resultado é vazio e o CT-U178 prova o caso positivo |
+| Q05 | mês sem receita | a reserva 21 (Larissa) sai em hoje - 119 |
 
-O CT-U178 compensa a Q09 inserindo consumos dentro do teste (sempre com ROLLBACK). Para as outras, vale acrescentar linhas a `02_inserts.sql`.
+Sobra a Q09 considerar **todos** os serviços (o planejamento pede só a categoria "Extras", que o DDL não tem).
 
 ---
 
@@ -133,16 +134,15 @@ Não há teste novo por elas: o roteiro (`roteiro-ct.md`) registra os CTs com st
 
 | Requisito | Situação no código |
 |---|---|
-| RN-01 (máximo de 30 noites) | só `saída > entrada`; 31 noites é aceito |
-| RN-03 (capacidade) | a tabela `reserva` nem tem número de hóspedes |
-| RN-06 (manutenção) | reserva em quarto `status_manutencao = TRUE` é aceita |
-| RN-07 (máquina de estados) | qualquer `UPDATE` de status passa (só o CHECK de domínio protege) |
-| RN-10 (sinal de 30%), RN-11 (consumo), RN-12 (check-in) | não implementadas |
-| Estorno no cancelamento (tabela 4.1 do `regras.md`) | `cancelar_reserva` grava só a multa; o estorno do `02_inserts.sql` foi inserido à mão |
-| `ck_reserva_desconto` | aceita 0 a 100; o `regras.md` fala em 0, 5 ou 10 |
-| `ON DELETE` | `consumo_servico` e `cancelamento` usam `CASCADE`; o `regras.md` diz que todas as FKs bloqueiam |
-| Nomes de status | banco usa `CHECK-IN`/`CHECK-OUT`/`NO-SHOW`; `regras.md` e `perguntas_de_negocio.md` usam `EM_ANDAMENTO`/`FINALIZADA`/`NO_SHOW` |
-| Caminhos | `AGENTS.md` cita `docs/regras.md`, mas o arquivo está em `regras.md`; `regras.md` cita `docs/perguntas_de_negocio.md`, que está na raiz |
+| RN-01 (máximo de 30 noites) | **Resolvido** (PR #33): `ck_reserva_max_noites`; CT-U03 |
+| RN-03 (capacidade) | **Resolvido** (PR #32): `numero_hospedes` e `trg_reserva_validacao`; CT-U40 a U43 |
+| RN-06 (manutenção) | **Resolvido** (PR #32): reserva em quarto MANUTENCAO é recusada; CT-U80 a U82 |
+| RN-07 (máquina de estados) | **Resolvido** (PR #32): o trigger valida a transição; CT-U94 a U96 |
+| RN-10, RN-11, RN-12, auditoria, `registrar_reserva`, `fazer_checkin` | **Cortadas e documentadas** em `regras.md` (PR #32) |
+| Estorno no cancelamento | **Resolvido** (PR #32): `cancelar_reserva` lança o estorno e o valor devido; CT-U61 e U62 |
+| `ck_reserva_desconto` | **Resolvido** (PR #33): só 0, 5 ou 10; CT-U05 |
+| `ON DELETE` | **Resolvido** (PR #33): `cancelamento` e `consumo_servico` usam RESTRICT; CT-U24 |
+| Nomes de status e caminhos | **Resolvido** (PR #32 e PR #31) |
 | Q09 | consulta considera **todos** os serviços; `perguntas_de_negocio.md` pede só a categoria "Extras", que não existe no DDL |
 
 ---
@@ -189,3 +189,24 @@ PG_DSN="host=localhost port=55432 dbname=hotel user=hotel password=hotel_lab_pwd
 ```
 
 Pela regra do `AGENTS.md`, o agente não rodou `git push`; nada foi enviado ao repositório remoto.
+
+---
+
+## 7. Integração dos PRs #32 (Pedro) e #33 (Yuri) (2026-11-26)
+
+Feita na branch local `integracao-teste` (a partir da branch de testes), sem alterar os PRs. Resultado: **278 testes, 278 passam**, também pelo compose do zero (`docker compose up -d --wait` e `docker compose run --rm testes`) e com a demonstração do `app` repetida duas vezes.
+
+Incompatibilidades que apareceram ao juntar tudo, e como cada uma foi resolvida:
+
+| Incompatibilidade | Causa | Correção |
+|---|---|---|
+| `python/main.py` quebrava | usava `status_manutencao`, que o PR #32 trocou por `status_quarto` | `WHERE status_quarto <> 'MANUTENCAO'` |
+| Q04 de `03_consultas.sql` e do arquivo do pgAdmin quebravam | mesma coluna | mesma troca |
+| Conflito em `03_consultas.sql` | Pedro versionou o formato gerado (instrução única); João restaurou os blocos `-- @Qnn` com o resultado esperado | ficou o formato de João (o do pgAdmin continua em `03_consultas_todas_pgadmin.sql`, regenerado pelo gerador, que reproduz o arquivo versionado) |
+| Conflito em `01_ddl.sql` | Yuri (`CHECK` 30 noites, desconto 0/5/10, RESTRICT) e Pedro (`numero_hospedes`, `taxa_checkout`, `valor_devido`, `status_quarto`) alteraram as mesmas linhas | ficaram as duas séries de constraints, com `ON DELETE RESTRICT` em `cancelamento` |
+| Conflito em `.gitattributes` | Pedro tinha só `*.sh` | ficou a versão com `* text=auto` e LF para `.sh`, `.sql`, `.py` |
+| 10 testes falhavam | valores esperados das consultas e CT-U156 (14 reservas) eram dos dados antigos | recalculados à mão contra `02_inserts.sql` do Yuri (conferidos também contra a saída) |
+| Sem cobertura das regras novas do Yuri | | testes novos: desconto fora de 0/5/10 (CT-U05), 30 e 31 noites (CT-U03) e RESTRICT em `cancelamento` e `consumo_servico` (CT-U24) |
+| Sobras de João | cabeçalho "Q01 a Q05" e caminho `scripts/` no gerador | corrigidos para "Q01 a Q10" e `python/` |
+
+Ainda em aberto: Q09 sem a categoria "Extras"; `testes/conftest.py` (pasta do Yuri) não é usado pelo compose, que roda `tests`; o README cita Oracle, Java e serviços que não existem no compose.

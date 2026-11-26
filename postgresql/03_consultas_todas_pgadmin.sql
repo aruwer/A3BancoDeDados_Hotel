@@ -1,4 +1,4 @@
--- GERADO por scripts/gerar_consultas_pgadmin.py a partir de postgresql/03_consultas.sql. NAO EDITE A MAO.
+-- GERADO por python/gerar_consultas_pgadmin.py a partir de postgresql/03_consultas.sql. NAO EDITE A MAO.
 -- Copie TUDO, cole no Query Tool do pgAdmin e execute uma vez (F5): as consultas saem numa grade so.
 -- Cada consulta tem uma linha 'linhas: N' (ordem 0) e depois uma linha por resultado (texto JSON, na ordem da consulta).
 -- Compare com os 'Resultado esperado' dos comentarios de 03_consultas.sql.
@@ -128,7 +128,7 @@ SELECT q.numero_quarto,
 FROM quarto q
 JOIN categoria_quarto c ON c.id_categoria = q.id_categoria
 CROSS JOIN periodo p
-WHERE NOT q.status_manutencao
+WHERE q.status_quarto <> 'MANUTENCAO'
   AND NOT EXISTS (
       SELECT 1
       FROM reserva r
@@ -152,7 +152,7 @@ SELECT q.numero_quarto,
 FROM quarto q
 JOIN categoria_quarto c ON c.id_categoria = q.id_categoria
 CROSS JOIN periodo p
-WHERE NOT q.status_manutencao
+WHERE q.status_quarto <> 'MANUTENCAO'
   AND NOT EXISTS (
       SELECT 1
       FROM reserva r

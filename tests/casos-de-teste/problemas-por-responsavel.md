@@ -49,29 +49,34 @@ A pessoa listada é o **autor do commit que introduziu** o trecho com problema (
 
 ## Yuri Soares Dutra
 
-| Id | Problema | Origem no histórico | Gravidade | O que fazer |
-|---|---|---|---|---|
-| P-07 | Cabeçalho do `02_inserts.sql` cita hóspedes que não existem (Diego, Bruno, Elisa, Fábio, Gabriela); os valores batem, os nomes não | `1406885` "feat(sql): adiciona 02_inserts.sql..." (os nomes dos hóspedes mudaram depois, em `bb9c5e8`, e o comentário não acompanhou) | Baixa | Trocar pelos nomes reais (João 2420, Carlos 2250, Ana 1550, Fernanda 1200, Mariana = Ricardo = 800, Luciana 400) |
-| P-08 | Faltam dados de fronteira: Q02 em D+7 CONFIRMADA e D+8, taxa de 20% exata (Q06), serviço nunca consumido e empate (Q07), hóspede que usou todos menos um (Q09), mês sem receita | `02_inserts.sql` (vários commits) | Baixa | Acrescentar as linhas, mantendo datas relativas e as somas financeiras que o CT-U156 confere |
-| DDL | `ck_reserva_desconto` aceita 0 a 100 (o `regras.md` diz 0, 5 ou 10); `ON DELETE CASCADE` em `cancelamento` e `consumo_servico` (o `regras.md` diz que todas as FKs bloqueiam); sem máximo de 30 noites (RN-01); `quarto` só tem `status_manutencao` booleano; `reserva` sem número de hóspedes (RN-03); `servico` sem `categoria` (Q09) | `fe72e9e` "Atualização sql" e anteriores (`b9a9e89`, `c68b2b5`) | Média | Decidir com Pedro: ou muda o DDL, ou o `regras.md` e o README registram a decisão (CT-M13) |
+| Id | Problema | Situação |
+|---|---|---|
+| P-07 | Cabeçalho do `02_inserts.sql` com nomes que não existem | **Resolvido** (PR #33) |
+| P-08 | Faltam dados de fronteira (Q02, Q06, Q07, Q09, mês sem receita) | **Resolvido** (PR #33): F1 a F8; testes recalculados |
+| DDL | `ck_reserva_desconto` 0 a 100; `CASCADE`; sem máximo de 30 noites | **Resolvido** (PR #33): desconto 0/5/10, RESTRICT e `ck_reserva_max_noites` |
+| DDL | `quarto` só com booleano; `reserva` sem número de hóspedes; `servico` sem `categoria` | `status_quarto` e `numero_hospedes` resolvidos pelo PR #32 (Pedro); `servico.categoria` segue sem existir (Q09 considera todos os serviços) |
 
-**CTs:** CT-U03, CT-U05, CT-U24, CT-U40 a CT-U43, CT-U80 a CT-U84, CT-U178.
+**CTs:** CT-U03, CT-U05, CT-U24, CT-U40 a CT-U43, CT-U80 a CT-U84, CT-U178: todos passam.
+
+**Situação em 2026-11-26:** a integração com o PR #32 teve conflito só em duas linhas do `01_ddl.sql`, resolvido mantendo as constraints dos dois. Falta decidir se `testes/conftest.py` fica (o compose roda `tests`).
 
 ---
 
 ## Pedro da Silva Kolling
 
-Os testes **não encontraram defeito de comportamento** em `cancelar_reserva`, `fazer_checkout` e no trigger: os 5 testes de mutação foram detectados e as fronteiras do `regras.md` batem. O que sobra são lacunas de escopo entre o `regras.md` e o que foi implementado, já documentadas por ele no cabeçalho de `procedures/postgresql_procedures.sql`.
+Os testes não encontraram defeito de comportamento nas procedures; o que havia eram lacunas de escopo, e o PR #32 as resolveu.
 
-| Id | Problema | Origem no histórico | Gravidade | O que fazer |
-|---|---|---|---|---|
-| Lacuna | `cancelar_reserva` grava só a multa; o estorno do sinal (tabela 4.1) e o "valor devido" não são lançados. O estorno do `02_inserts.sql` foi inserido à mão | `2399f59` / `5df922f` | Média | Lançar o ESTORNO em `pagamento` na procedure, ou registrar o corte da regra |
-| Lacuna | `fazer_checkout` não atualiza o quarto (LIMPEZA, decisão D-02) nem guarda taxa e valor final em colunas próprias (seção 13.2) | `2399f59` | Baixa | Depende da decisão sobre `status` do quarto (com Yuri) |
-| Lacuna | Regras sem código: RN-03, RN-06, RN-07 (qualquer `UPDATE` de status passa), RN-10, RN-11, RN-12, auditoria, `registrar_reserva` e `fazer_checkin` | `regras.md` (`af3762c`, `45e87cd`, `b0ef3b0`) | Média | Decidir, regra por regra, entre implementar e cortar as "Extra" (seção 2 do `regras.md`) |
-| Nomes | `regras.md` e `perguntas_de_negocio.md` usam `EM_ANDAMENTO`/`FINALIZADA`/`NO_SHOW`; o banco usa `CHECK-IN`/`CHECK-OUT`/`NO-SHOW` | `af3762c` e `44cd078` | Baixa | Alinhar os documentos ao DDL (ou o contrário) em um só commit |
-| Caminho | `regras.md` cita `docs/perguntas_de_negocio.md`, que está na raiz | `af3762c` | Baixa | Corrigir o caminho |
+| Id | Problema | Situação |
+|---|---|---|
+| Lacuna | Estorno do sinal e valor devido não lançados | **Resolvido** (PR #32): CT-U61 e CT-U62 |
+| Lacuna | `fazer_checkout` sem LIMPEZA e sem colunas de taxa e valor final | **Resolvido** (PR #32) |
+| Lacuna | RN-03, RN-06, RN-07 sem código; RN-10, RN-11, RN-12 e auditoria | RN-03, RN-06 e RN-07 **resolvidas** (trigger `trg_reserva_validacao`); as Extra foram **cortadas e documentadas** |
+| Nomes | Status `EM_ANDAMENTO`/`FINALIZADA`/`NO_SHOW` nos documentos | **Resolvido** (PR #32) |
+| Caminho | `docs/perguntas_de_negocio.md` | **Resolvido** (PR #32) |
+| Integração | O PR #32 trocou `status_manutencao` por `status_quarto` e quebrava `main.py`, a Q04 e o arquivo do pgAdmin; conflito em `03_consultas.sql` | **Resolvido** na integração (ver relatório, seção 7) |
+| Registro | Falta no `docs/ia-log.md` a decisão de trocar o booleano por `status_quarto` | Aberto |
 
-**CTs:** CT-U61, CT-U62, CT-U90 a CT-U96, CT-U107, CT-U108, CT-U120 a CT-U143, CT-U160, CT-U161, CT-R12, CT-M25.
+**CTs:** CT-U61, CT-U62, CT-U90 a CT-U96, CT-U107, CT-U108, CT-U120 a CT-U143, CT-U160, CT-U161, CT-R12, CT-M25: todos passam.
 
 ---
 

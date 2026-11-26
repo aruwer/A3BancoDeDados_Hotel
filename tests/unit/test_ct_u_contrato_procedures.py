@@ -87,7 +87,7 @@ def test_ct_u156_seed_financeiro_e_consistente(conn):
         LEFT JOIN cancelamento c ON c.id_reserva = r.id_reserva
         WHERE r.status_reserva IN ('CHECK-OUT','CANCELADA','NO-SHOW')
         GROUP BY r.id_reserva, r.status_reserva, r.valor_final_pago, c.taxa_multa_aplicada ORDER BY 1""")
-    assert len(linhas) == 14
+    assert len(linhas) == 15
     divergentes = [(i, s, liq, esp) for i, s, liq, esp in linhas if liq != esp]
     assert divergentes == []
 
@@ -96,8 +96,31 @@ def test_ct_u157_valor_final_do_seed_bate_com_bruto_mais_consumos(conn):
     """Given as estadias CHECK-OUT dos dados de exemplo (desconto 0, saída no prazo)
     Then valor_final_pago = valor_total_bruto + soma dos consumos"""
     linhas = todos(conn, """
-        SELECT r.id_reserva, r.valor_final_pago, r.valor_total_bruto + COALESCE(SUM(c.valor_total_item), 0)
+        SELECT r.id_reserva, r.valor_final_pago,
+               r.valor_total_bruto + COALESCE(SUM(c.valor_total_item), 0) + r.taxa_checkout
         FROM reserva r LEFT JOIN consumo_servico c USING (id_reserva)
         WHERE r.status_reserva = 'CHECK-OUT'
-        GROUP BY r.id_reserva, r.valor_final_pago, r.valor_total_bruto""")
+        GROUP BY r.id_reserva, r.valor_final_pago, r.valor_total_bruto, r.taxa_checkout""")
     assert [(i, f, e) for i, f, e in linhas if f != e] == []
+
+
+def test_ct_u158_seed_tem_os_quatro_status_de_quarto(conn):
+    """Given os dados de exemplo
+    Then existem quartos nos quatro status do ciclo (regras.md seção 8), com o 103 em MANUTENCAO"""
+    status = dict(todos(conn, "SELECT numero_quarto, status_quarto FROM quarto"))
+    assert set(status.values()) == {"DISPONIVEL", "OCUPADO", "LIMPEZA", "MANUTENCAO"}
+    assert status["103"] == "MANUTENCAO" and status["202"] == "OCUPADO" and status["101"] == "LIMPEZA"
+
+
+def test_ct_u159_seed_quarto_com_checkin_esta_ocupado(conn):
+    """Given os dados de exemplo
+    Then todo quarto com reserva CHECK-IN está OCUPADO, e nenhum quarto OCUPADO fica sem hóspede"""
+    com_checkin = {r[0] for r in todos(conn, "SELECT id_quarto FROM reserva WHERE status_reserva='CHECK-IN'")}
+    ocupados = {r[0] for r in todos(conn, "SELECT id_quarto FROM quarto WHERE status_quarto='OCUPADO'")}
+    assert com_checkin == ocupados
+
+
+def test_ct_u159_seed_checkout_tem_taxa_zero_e_demais_reservas_tambem(conn):
+    """Given os dados de exemplo (nenhuma saída passou de 12:00)
+    Then taxa_checkout é 0 em todas as reservas"""
+    assert um(conn, "SELECT COUNT(*) FROM reserva WHERE taxa_checkout <> 0")[0] == 0

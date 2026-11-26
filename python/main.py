@@ -54,7 +54,7 @@ def caminho_feliz_checkout(conn, valor_pago: Decimal):
                     (
                         SELECT MIN(id_quarto)
                         FROM Quarto
-                        WHERE status_manutencao = FALSE
+                        WHERE status_quarto <> 'MANUTENCAO'
                           AND id_quarto NOT IN (
                               SELECT id_quarto
                               FROM Reserva

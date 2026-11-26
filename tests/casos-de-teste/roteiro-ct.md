@@ -44,15 +44,11 @@ O `regras.md` descreve um modelo maior que o implementado. Cada CT leva um statu
 
 ### 1.4 Vocabulário usado nos CTs (nomes do código atual)
 
-O `regras.md` usa nomes diferentes dos do banco. Nos CTs vale o nome do banco; o equivalente do `regras.md` aparece entre parênteses na primeira vez.
+Os nomes de **status** do `regras.md`, do `README.md` e do `perguntas_de_negocio.md` já são os do banco (`PENDENTE`, `CONFIRMADA`, `CHECK-IN`, `CHECK-OUT`, `CANCELADA`, `NO-SHOW`). Os nomes antigos `EM_ANDAMENTO`, `FINALIZADA` e `NO_SHOW` não existem mais nos documentos e são recusados pelo `ck_reserva_status` (CT-U04). Restam diferenças só nos nomes de tabelas e colunas, onde vale o nome do banco; o equivalente do `regras.md` aparece entre parênteses na primeira vez.
 
 | Banco (main) | `regras.md` |
 |---|---|
-| `CHECK-IN` | `EM_ANDAMENTO` |
-| `CHECK-OUT` | `FINALIZADA` |
-| `NO-SHOW` | `NO_SHOW` |
-| `PENDENTE` | (não existe no `regras.md`) |
-| `quarto.status_manutencao = TRUE` | `quarto.status = MANUTENCAO` |
+| `quarto.status_quarto = 'MANUTENCAO'` | `quarto.status = MANUTENCAO` |
 | `categoria_quarto` | `TIPO_QUARTO` |
 | `servico.valor_unitario`, `consumo_servico` | `SERVICO.preco_unitario`, `CONSUMO_RESERVA` |
 | `cancelamento.taxa_multa_aplicada` | `RESERVA.multa_cancelamento` |
@@ -78,11 +74,11 @@ Dados de exemplo usados como referência (`02_inserts.sql`): categorias Standard
 |---|---|---|---|
 | RN-01 estadia de 1 a 30 noites | Núcleo | PARCIAL (só `saída > entrada`; falta o máximo de 30) | CT-U01, CT-U02, CT-U03 |
 | RN-02 sem sobreposição de reservas ativas | Núcleo | IMPL (trigger) | CT-U30 a CT-U37, CT-I05, CT-I06, CT-R05 |
-| RN-03 hóspedes de 1 até a capacidade | Núcleo | LACUNA | CT-U40 a CT-U43 |
+| RN-03 hóspedes de 1 até a capacidade | Núcleo | IMPL (trigger `trg_reserva_validacao`, coluna `numero_hospedes`) | CT-U40 a CT-U43 |
 | RN-04 cancelamento e multa | Núcleo | IMPL | CT-U50 a CT-U63, CT-I01, CT-I07 |
 | RN-05 desconto de fidelidade | Extra | IMPL | CT-U70 a CT-U76 |
-| RN-06 quarto em manutenção / check-in só em quarto disponível | Núcleo | LACUNA | CT-U80 a CT-U84 |
-| RN-07 máquina de estados da reserva | Núcleo | LACUNA | CT-U90 a CT-U96 |
+| RN-06 quarto em manutenção / check-in só em quarto disponível | Núcleo | PARCIAL (reserva em MANUTENCAO barrada pelo trigger; check-in só em DISPONIVEL depende de `fazer_checkin`, cortada) | CT-U80 a CT-U84 |
+| RN-07 máquina de estados da reserva | Núcleo | IMPL (trigger `trg_reserva_validacao`) | CT-U90 a CT-U96 |
 | RN-08 late check-out | Núcleo | IMPL | CT-U100 a CT-U108 |
 | RN-09 pagamento cobre o saldo | Núcleo | IMPL | CT-U110 a CT-U115, CT-I02 |
 | RN-10 sinal de 30% | Extra | LACUNA | CT-U120 a CT-U122 |
@@ -431,9 +427,9 @@ Scenario: Atualizar colunas sem relação com a regra
   And a própria linha não conta como conflito de si mesma
 ```
 
-### 3.3 Capacidade de hóspedes (RN-03) · LACUNA
+### 3.3 Capacidade de hóspedes (RN-03) · IMPL
 
-O modelo atual não tem `numero_hospedes` na `reserva`. Os CTs abaixo exigem a coluna e a validação.
+`RESERVA.numero_hospedes` (DEFAULT 1, `ck_reserva_hospedes`) e o trigger `trg_reserva_validacao` (HOTEL-003). Testes em `tests/unit/test_ct_u_trigger_validacao.py`.
 
 **CT-U40 · Hóspedes igual à capacidade é aceito**
 ```gherkin
@@ -570,7 +566,7 @@ Scenario: Reservar o mesmo período depois do cancelamento
   Then a reserva é aceita
 ```
 
-**CT-U61 · Estorno do sinal (tabela 4.1)** · LACUNA
+**CT-U61 · Estorno do sinal (tabela 4.1)** · IMPL
 ```gherkin
 Scenario Outline: Estorno = maior valor entre (sinal - multa) e 0
   Given uma reserva de 3 noites com D = R$ 200,00 e sinal pago de R$ 180,00
@@ -583,9 +579,9 @@ Scenario Outline: Estorno = maior valor entre (sinal - multa) e 0
     | 1    | 200,00 | 0,00    |
     | -1   | 200,00 | 0,00    |
 ```
-Hoje `cancelar_reserva` só grava a multa; o estorno do `02_inserts.sql` é inserido à mão. A procedure deveria lançar o ESTORNO em `pagamento`.
+`cancelar_reserva` lança o ESTORNO em `pagamento` (e o valor devido em `cancelamento.valor_devido`).
 
-**CT-U62 · Valor devido quando a multa passa do sinal** · LACUNA, a multa de R$ 200,00 com sinal de R$ 180,00 deixa R$ 20,00 devidos, registrados de forma consultável (o `regras.md` seção 4.1 exige "valor devido").
+**CT-U62 · Valor devido quando a multa passa do sinal** · IMPL, a multa de R$ 200,00 com sinal de R$ 180,00 deixa R$ 20,00 devidos, registrados de forma consultável (o `regras.md` seção 4.1 exige "valor devido").
 
 **CT-U63 · Cancelamento não faz COMMIT nem ROLLBACK** · IMPL, ver CT-U154.
 
@@ -653,9 +649,9 @@ Scenario: Arredondamento com desconto
   Then o valor final é arredondado a 2 casas (316,66)
 ```
 
-### 3.6 Manutenção do quarto e check-in (RN-06, RN-12) · LACUNA
+### 3.6 Manutenção do quarto e check-in (RN-06, RN-12) · PARCIAL
 
-O DDL guarda só `status_manutencao` (booleano) e não existe `fazer_checkin`.
+CT-U80 a CT-U82: **IMPL** no trigger `trg_reserva_validacao` (HOTEL-004; só reserva ativa é barrada, quem já está hospedado pode sair). CT-U83 (check-in só em DISPONIVEL) e RN-12 dependem de `fazer_checkin`, que foi **cortada** (regra Extra; o check-in é feito por UPDATE direto, CONFIRMADA para CHECK-IN).
 
 **CT-U80 · Reserva em quarto de manutenção é recusada** · HOTEL-004
 ```gherkin
@@ -681,13 +677,13 @@ Scenario Outline: Status do quarto no check-in
     | LIMPEZA    | recusado, HOTEL-004 |
     | MANUTENCAO | recusado, HOTEL-004 |
 ```
-Hoje o modelo não tem OCUPADO nem LIMPEZA (decisão D-02 do `regras.md`).
+O modelo já tem os quatro status (decisão D-02); falta a procedure `fazer_checkin` para aplicar a regra.
 
-**CT-U84 · Ciclo do quarto** · DISPONIVEL para OCUPADO (check-in), OCUPADO para LIMPEZA (check-out), LIMPEZA para DISPONIVEL (UPDATE de governança).
+**CT-U84 · Ciclo do quarto** · PARCIAL. OCUPADO para LIMPEZA (check-out) e LIMPEZA para DISPONIVEL (UPDATE de governança) estão cobertos em CT-U107; DISPONIVEL para OCUPADO (check-in) depende de `fazer_checkin`.
 
-### 3.7 Máquina de estados da reserva (RN-07) · LACUNA
+### 3.7 Máquina de estados da reserva (RN-07) · IMPL
 
-Hoje o `UPDATE` direto aceita qualquer troca de status (só o CHECK de domínio protege).
+O trigger `trg_reserva_validacao` recusa com HOTEL-007 qualquer troca fora da sequência, inclusive por `UPDATE` direto. Os testes cobrem as 7 transições válidas e 12 inválidas.
 
 **CT-U90 a CT-U93 · Transições válidas**
 ```gherkin
@@ -773,9 +769,9 @@ Scenario: Reserva 10 (bruto 1200, consumos 70 + 45)
   Then o valor final é R$ 1.315,00
 ```
 
-**CT-U107 · Quarto vai para LIMPEZA no check-out** · LACUNA (D-02), o quarto deve mudar de status; hoje não existe status de quarto.
+**CT-U107 · Quarto vai para LIMPEZA no check-out** · IMPL (D-02). `fazer_checkout` leva o quarto a LIMPEZA, parte de OCUPADO, DISPONIVEL ou LIMPEZA, não sobrescreve MANUTENCAO, não mexe no quarto quando o check-out é recusado (HOTEL-009) e desfaz com o ROLLBACK. A governança devolve o quarto a DISPONIVEL por UPDATE.
 
-**CT-U108 · Taxa de late check-out fica gravada na reserva** · LACUNA, `RESERVA.taxa_checkout` e `valor_final` (o `regras.md` seção 13.2 exige para Q05).
+**CT-U108 · Taxa de late check-out fica gravada na reserva** · IMPL. `RESERVA.taxa_checkout` guarda 0, 50% ou 100% da diária cheia (fronteiras 12:00:00, 12:00:01, 18:00:00, 18:00:01), e `valor_final_pago` = diárias com desconto + consumos + `taxa_checkout`. Reserva ativa tem taxa 0 e valor final nulo; check-out recusado não grava taxa.
 
 ### 3.9 Pagamento e saldo (RN-09, `fazer_checkout`)
 
@@ -1006,7 +1002,7 @@ Scenario: Estadia completa
   When faço o check-in, lanço consumos e faço o check-out com o valor exato do saldo
   Then valor_final_pago = diárias com desconto + consumos + taxa
   And a soma dos pagamentos menos os estornos é igual ao valor final
-  And o quarto ocupa LIMPEZA no fim (lacuna D-02)
+  And o quarto ocupa LIMPEZA no fim (D-02, coberto em CT-U107)
 ```
 
 **CT-I03 · Estadia com desconto e late check-out juntos** · IMPL, hóspede com 10 estadias, saída às 12:00:01 e consumo de R$ 100,00, valor final conferido à mão.
@@ -1364,7 +1360,7 @@ Scenario: Comparação com o resultado esperado versionado
 
 **CT-R11 · Nome das constraints não muda** · IMPL, os testes dependem de nomes (ck_reserva_datas etc.); renomear sem atualizar os CTs falha.
 
-**CT-R12 · Mudança de status do enunciado** · IMPL
+**CT-R12 · Mudança de status do enunciado** · IMPL. Documentos alinhados ao DDL; o teste `test_ct_r12_documentos_usam_os_status_do_ddl` falha se um nome antigo voltar.
 ```gherkin
 Scenario: Alinhamento entre documentação e banco
   When o conjunto de status do DDL muda
@@ -1493,7 +1489,7 @@ Scenario: Dados e credenciais
   And as senhas do compose estão marcadas como de laboratório
 ```
 
-**CT-M25 · Referências cruzadas dos documentos** · links e caminhos citados existem. Ex.: AGENTS.md cita `docs/regras.md`, mas o arquivo está em `regras.md` na raiz; `regras.md` cita `docs/perguntas_de_negocio.md`, que está na raiz.
+**CT-M25 · Referências cruzadas dos documentos** · IMPL. Links e caminhos citados existem. `AGENTS.md`, `README.md`, `regras.md` e `perguntas_de_negocio.md` agora apontam para `regras.md` e `perguntas_de_negocio.md` na raiz; o teste `test_ct_m25_caminhos_citados_existem` confere cada caminho `docs/...` e cada link `.md`.
 
 **CT-M26 · Seção "Como testar" da PR e do README sem trechos cortados.**
 
@@ -1566,9 +1562,9 @@ Ensaiar em rodízio: cada pessoa explica um trecho que não escreveu.
 | # | Lacuna ou divergência | CTs que falham hoje |
 |---|---|---|
 | 1 | Limite de 30 noites (RN-01) sem constraint | CT-U03 |
-| 2 | Capacidade de hóspedes (RN-03) sem coluna nem validação | CT-U40 a CT-U43 |
-| 3 | Quarto em manutenção pode ser reservado (RN-06); sem status de quarto OCUPADO/LIMPEZA | CT-U80 a CT-U84, CT-U107 |
-| 4 | Máquina de estados (RN-07) sem trigger; qualquer UPDATE de status passa | CT-U94 a CT-U96 |
+| 2 | ~~Capacidade de hóspedes (RN-03) sem coluna nem validação~~ **Corrigido** | CT-U40 a CT-U43 |
+| 3 | ~~Quarto em manutenção pode ser reservado (RN-06)~~ **Corrigido** no trigger; check-in só em DISPONIVEL depende de `fazer_checkin` (cortada) | CT-U80 a CT-U84 |
+| 4 | ~~Máquina de estados (RN-07) sem trigger~~ **Corrigido** | CT-U94 a CT-U96 |
 | 5 | Sinal de 30% (RN-10) e estorno no cancelamento (tabela 4.1) não são lançados | CT-U61, CT-U62, CT-U120 a CT-U122 |
 | 6 | Consumo sem trigger (RN-11); `valor_total_item` digitado à mão | CT-U131 a CT-U133 |
 | 7 | Check-in (RN-12) sem procedure | CT-U140 a CT-U143 |
@@ -1578,8 +1574,8 @@ Ensaiar em rodízio: cada pessoa explica um trecho que não escreveu.
 | 11 | Serviço `testes` do compose roda `pytest` sem testes pytest | CT-I16, CT-I17 |
 | 12 | App Python: demo não repetível, BOM em dois arquivos, sem HOTEL-009 nem HOTEL-005 | CT-A09, CT-A10, CT-A13, CT-A15 |
 | 13 | `explain_antes_depois.txt` ainda não existe | CT-I22, CT-M15 |
-| 14 | Duas nomenclaturas de status (CHECK-IN/CHECK-OUT x EM_ANDAMENTO/FINALIZADA) | CT-R12 |
-| 15 | Caminhos citados nos documentos não existem (`docs/regras.md`, `docs/perguntas_de_negocio.md`) | CT-M25 |
+| 14 | ~~Duas nomenclaturas de status (CHECK-IN/CHECK-OUT x EM_ANDAMENTO/FINALIZADA)~~ **Corrigido** | CT-R12 |
+| 15 | ~~Caminhos citados nos documentos não existem (`docs/regras.md`, `docs/perguntas_de_negocio.md`)~~ **Corrigido** | CT-M25 |
 | 16 | `Q09` pede `servico.categoria`, que não existe no DDL | CT-U178 |
 
 ### 8.2 Próximos passos sugeridos
@@ -1604,4 +1600,4 @@ Os CT-U com status IMPL e PARCIAL (parte implementada) estão codificados em `te
 | `test_ct_u_consultas.py` | CT-U170 a U179, U180, U181 |
 | `test_ct_u_indices.py` | CT-U190, U192 |
 
-Resultado atual: 180 passam. Os 2 `xfail` estritos (BUG-01 e BUG-02) deixaram de ser necessários depois das correções de João (`a89d648` e seguintes); o histórico está em `relatorio-problemas.md`. Fora desta etapa ficam: os CT-U com status LACUNA, o CT-U03 (31 noites; a constraint do máximo não existe), o CT-U24 (decisão sobre `ON DELETE`), o CT-U29 (manual), o CT-U151 e o CT-U191/U193/U194 (dependem de decisão ou de massa de dados) e os grupos CT-I, CT-A, CT-R e CT-M.
+Resultado atual: 278 passam, sem `xfail`, na integração dos PRs #32 (Pedro) e #33 (Yuri) com a branch de testes (ver `relatorio-problemas.md`, seção 7). Os CT-U03, CT-U05, CT-U24, CT-U40 a CT-U43, CT-U61, CT-U62, CT-U80 a CT-U82 e CT-U94 a CT-U96, antes LACUNA ou PARCIAL, agora têm teste. Fora desta etapa ficam: o CT-U29 (manual), o CT-U151 e o CT-U191/U193/U194 (dependem de decisão ou de massa de dados) e os grupos CT-I, CT-A, CT-R e CT-M.

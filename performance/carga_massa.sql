@@ -59,12 +59,12 @@ FROM generate_series(1, 50) gs
 ON CONFLICT DO NOTHING;
 
 -- 3. Popular Quarto (~200 quartos)
-INSERT INTO perf_test.Quarto (id_categoria, numero_quarto, andar, status_manutencao)
+INSERT INTO perf_test.Quarto (id_categoria, numero_quarto, andar, status_quarto)
 SELECT
     1 + (gs % 3),
     'P' || lpad(gs::text, 4, '0'),
     1 + (gs % 10),
-    (gs % 20 = 0)  -- ~5% em manutenção
+    CASE WHEN gs % 20 = 0 THEN 'MANUTENCAO' ELSE 'DISPONIVEL' END  -- ~5% em manutenção
 FROM generate_series(1, 200) gs;
 
 -- 4. Popular Reserva (~200.000 reservas)
