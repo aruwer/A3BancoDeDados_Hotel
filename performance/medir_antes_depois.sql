@@ -2,7 +2,7 @@
 -- SQL puro (sem comandos do psql): copie TUDO, cole no Query Tool do pgAdmin e execute uma vez (F5).
 -- Tambem roda no psql (-f) e pode ser lido por uma aplicacao. So ASCII de proposito.
 --
--- O que faz, na ordem: mede 3 consultas ANTES dos indices (5 execucoes cada), cria os 3 indices de
+-- O que faz, na ordem: mede 4 consultas ANTES dos indices (5 execucoes cada), cria os 4 indices de
 -- postgresql/04_indices.sql no schema perf_test, atualiza as estatisticas e mede DEPOIS (5 execucoes cada).
 -- O resultado e UMA grade (coluna "texto"): resumo com a mediana do Execution Time, e logo abaixo o texto REAL de cada plano.
 -- Para o performance/explain_antes_depois.txt: clique na coluna, Ctrl+A, Ctrl+C e cole no arquivo.
@@ -73,10 +73,21 @@ SELECT r.id_reserva, r.id_hospede, r.id_quarto, r.data_entrada_prevista
  ORDER BY r.data_entrada_prevista
 $q$);
 
--- 3) Os 3 indices do projeto (mesmos de postgresql/04_indices.sql), aplicados ao schema perf_test.
+-- D: FK reserva.id_quarto (JOIN com quarto) e a busca de sobreposicao que o trigger trg_reserva_sobreposicao faz por quarto.
+SELECT perf_test.medir_plano('ANTES', 'D', $q$
+SELECT r.id_reserva, r.data_entrada_prevista, r.data_saida_prevista
+  FROM perf_test.reserva r
+ WHERE r.id_quarto = 77
+   AND r.status_reserva IN ('PENDENTE', 'CONFIRMADA', 'CHECK-IN')
+   AND r.data_entrada_prevista < CURRENT_DATE + 10
+   AND r.data_saida_prevista   > CURRENT_DATE + 8
+$q$);
+
+-- 3) Os 4 indices do projeto (mesmos de postgresql/04_indices.sql), aplicados ao schema perf_test.
 CREATE INDEX idx_reserva_hospede        ON perf_test.reserva (id_hospede);
 CREATE INDEX idx_consumo_reserva        ON perf_test.consumo_servico (id_reserva);
 CREATE INDEX idx_reserva_status_entrada ON perf_test.reserva (status_reserva, data_entrada_prevista);
+CREATE INDEX idx_reserva_quarto         ON perf_test.reserva (id_quarto);
 
 ANALYZE perf_test.reserva;
 ANALYZE perf_test.consumo_servico;
@@ -103,6 +114,15 @@ SELECT r.id_reserva, r.id_hospede, r.id_quarto, r.data_entrada_prevista
  WHERE r.status_reserva = 'CONFIRMADA'
    AND r.data_entrada_prevista BETWEEN CURRENT_DATE AND CURRENT_DATE + 7
  ORDER BY r.data_entrada_prevista
+$q$);
+
+SELECT perf_test.medir_plano('DEPOIS', 'D', $q$
+SELECT r.id_reserva, r.data_entrada_prevista, r.data_saida_prevista
+  FROM perf_test.reserva r
+ WHERE r.id_quarto = 77
+   AND r.status_reserva IN ('PENDENTE', 'CONFIRMADA', 'CHECK-IN')
+   AND r.data_entrada_prevista < CURRENT_DATE + 10
+   AND r.data_saida_prevista   > CURRENT_DATE + 8
 $q$);
 
 -- 5) RESULTADO (esta e a unica grade que o pgAdmin mostra): ambiente, resumo com medianas e o texto dos planos.

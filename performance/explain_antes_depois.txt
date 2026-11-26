@@ -1,0 +1,654 @@
+# Plano antes e depois dos indices (EXPLAIN (ANALYZE, BUFFERS)), saida real de performance/medir_antes_depois.sql
+# Medido em 2026-11-26: PostgreSQL 17.12 em contêiner Docker (postgres:17), carga de performance/carga_massa.sql
+# (200 mil reservas), 5 execucoes por consulta; o resumo usa a mediana do Execution Time.
+# A: reservas de um hospede | B: consumos de uma reserva | C: chegadas dos proximos 7 dias | D: busca de conflito por quarto
+
+AMBIENTE: PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+LINHAS: reserva=200000 | consumo_servico=240000 | hospede=5009
+INDICES EM perf_test: explain_resultados_pkey, idx_consumo_reserva, idx_reserva_hospede, idx_reserva_quarto, idx_reserva_status_entrada, pk_cancelamento, pk_categoria_quarto, pk_consumo_servico, pk_hospede, pk_quarto, pk_reserva, pk_servico, uk_hospede_cpf, uk_hospede_email
+RESUMO consulta A | mediana ANTES 9.057 ms | mediana DEPOIS 0.038 ms | ganho 238.3x
+RESUMO consulta B | mediana ANTES 9.372 ms | mediana DEPOIS 0.016 ms | ganho 585.8x
+RESUMO consulta C | mediana ANTES 11.887 ms | mediana DEPOIS 0.126 ms | ganho 94.3x
+RESUMO consulta D | mediana ANTES 10.309 ms | mediana DEPOIS 1.352 ms | ganho 7.6x
+ANTES | consulta A | execucao 1 | Nested Loop  (cost=4971.43..4984.51 rows=40 width=34) (actual time=9.327..11.232 rows=40 loops=1)
+ANTES | consulta A | execucao 1 |   Buffers: shared hit=2540
+ANTES | consulta A | execucao 1 |   ->  Gather Merge  (cost=4971.15..4975.71 rows=40 width=21) (actual time=9.165..11.060 rows=40 loops=1)
+ANTES | consulta A | execucao 1 |         Workers Planned: 1
+ANTES | consulta A | execucao 1 |         Workers Launched: 1
+ANTES | consulta A | execucao 1 |         Buffers: shared hit=2537
+ANTES | consulta A | execucao 1 |         ->  Sort  (cost=3971.14..3971.20 rows=24 width=21) (actual time=5.718..5.720 rows=20 loops=2)
+ANTES | consulta A | execucao 1 |               Sort Key: r.data_entrada_prevista
+ANTES | consulta A | execucao 1 |               Sort Method: quicksort  Memory: 26kB
+ANTES | consulta A | execucao 1 |               Buffers: shared hit=2537
+ANTES | consulta A | execucao 1 |               Worker 0:  Sort Method: quicksort  Memory: 25kB
+ANTES | consulta A | execucao 1 |               ->  Parallel Seq Scan on reserva r  (cost=0.00..3970.59 rows=24 width=21) (actual time=0.244..5.609 rows=20 loops=2)
+ANTES | consulta A | execucao 1 |                     Filter: (id_hospede = 4242)
+ANTES | consulta A | execucao 1 |                     Rows Removed by Filter: 99980
+ANTES | consulta A | execucao 1 |                     Buffers: shared hit=2500
+ANTES | consulta A | execucao 1 |   ->  Materialize  (cost=0.28..8.31 rows=1 width=21) (actual time=0.004..0.004 rows=1 loops=40)
+ANTES | consulta A | execucao 1 |         Buffers: shared hit=3
+ANTES | consulta A | execucao 1 |         ->  Index Scan using pk_hospede on hospede h  (cost=0.28..8.30 rows=1 width=21) (actual time=0.103..0.104 rows=1 loops=1)
+ANTES | consulta A | execucao 1 |               Index Cond: (id_hospede = 4242)
+ANTES | consulta A | execucao 1 |               Buffers: shared hit=3
+ANTES | consulta A | execucao 1 | Planning:
+ANTES | consulta A | execucao 1 |   Buffers: shared hit=113
+ANTES | consulta A | execucao 1 | Planning Time: 0.538 ms
+ANTES | consulta A | execucao 1 | Execution Time: 11.627 ms
+ANTES | consulta A | execucao 2 | Nested Loop  (cost=4971.43..4984.51 rows=40 width=34) (actual time=7.190..9.038 rows=40 loops=1)
+ANTES | consulta A | execucao 2 |   Buffers: shared hit=2540
+ANTES | consulta A | execucao 2 |   ->  Gather Merge  (cost=4971.15..4975.71 rows=40 width=21) (actual time=7.117..8.956 rows=40 loops=1)
+ANTES | consulta A | execucao 2 |         Workers Planned: 1
+ANTES | consulta A | execucao 2 |         Workers Launched: 1
+ANTES | consulta A | execucao 2 |         Buffers: shared hit=2537
+ANTES | consulta A | execucao 2 |         ->  Sort  (cost=3971.14..3971.20 rows=24 width=21) (actual time=4.823..4.825 rows=20 loops=2)
+ANTES | consulta A | execucao 2 |               Sort Key: r.data_entrada_prevista
+ANTES | consulta A | execucao 2 |               Sort Method: quicksort  Memory: 25kB
+ANTES | consulta A | execucao 2 |               Buffers: shared hit=2537
+ANTES | consulta A | execucao 2 |               Worker 0:  Sort Method: quicksort  Memory: 25kB
+ANTES | consulta A | execucao 2 |               ->  Parallel Seq Scan on reserva r  (cost=0.00..3970.59 rows=24 width=21) (actual time=0.157..4.779 rows=20 loops=2)
+ANTES | consulta A | execucao 2 |                     Filter: (id_hospede = 4242)
+ANTES | consulta A | execucao 2 |                     Rows Removed by Filter: 99980
+ANTES | consulta A | execucao 2 |                     Buffers: shared hit=2500
+ANTES | consulta A | execucao 2 |   ->  Materialize  (cost=0.28..8.31 rows=1 width=21) (actual time=0.002..0.002 rows=1 loops=40)
+ANTES | consulta A | execucao 2 |         Buffers: shared hit=3
+ANTES | consulta A | execucao 2 |         ->  Index Scan using pk_hospede on hospede h  (cost=0.28..8.30 rows=1 width=21) (actual time=0.067..0.068 rows=1 loops=1)
+ANTES | consulta A | execucao 2 |               Index Cond: (id_hospede = 4242)
+ANTES | consulta A | execucao 2 |               Buffers: shared hit=3
+ANTES | consulta A | execucao 2 | Planning Time: 0.058 ms
+ANTES | consulta A | execucao 2 | Execution Time: 9.057 ms
+ANTES | consulta A | execucao 3 | Nested Loop  (cost=4971.43..4984.51 rows=40 width=34) (actual time=6.440..8.317 rows=40 loops=1)
+ANTES | consulta A | execucao 3 |   Buffers: shared hit=2540
+ANTES | consulta A | execucao 3 |   ->  Gather Merge  (cost=4971.15..4975.71 rows=40 width=21) (actual time=6.427..8.295 rows=40 loops=1)
+ANTES | consulta A | execucao 3 |         Workers Planned: 1
+ANTES | consulta A | execucao 3 |         Workers Launched: 1
+ANTES | consulta A | execucao 3 |         Buffers: shared hit=2537
+ANTES | consulta A | execucao 3 |         ->  Sort  (cost=3971.14..3971.20 rows=24 width=21) (actual time=4.699..4.701 rows=20 loops=2)
+ANTES | consulta A | execucao 3 |               Sort Key: r.data_entrada_prevista
+ANTES | consulta A | execucao 3 |               Sort Method: quicksort  Memory: 26kB
+ANTES | consulta A | execucao 3 |               Buffers: shared hit=2537
+ANTES | consulta A | execucao 3 |               Worker 0:  Sort Method: quicksort  Memory: 25kB
+ANTES | consulta A | execucao 3 |               ->  Parallel Seq Scan on reserva r  (cost=0.00..3970.59 rows=24 width=21) (actual time=0.277..4.654 rows=20 loops=2)
+ANTES | consulta A | execucao 3 |                     Filter: (id_hospede = 4242)
+ANTES | consulta A | execucao 3 |                     Rows Removed by Filter: 99980
+ANTES | consulta A | execucao 3 |                     Buffers: shared hit=2500
+ANTES | consulta A | execucao 3 |   ->  Materialize  (cost=0.28..8.31 rows=1 width=21) (actual time=0.000..0.000 rows=1 loops=40)
+ANTES | consulta A | execucao 3 |         Buffers: shared hit=3
+ANTES | consulta A | execucao 3 |         ->  Index Scan using pk_hospede on hospede h  (cost=0.28..8.30 rows=1 width=21) (actual time=0.009..0.010 rows=1 loops=1)
+ANTES | consulta A | execucao 3 |               Index Cond: (id_hospede = 4242)
+ANTES | consulta A | execucao 3 |               Buffers: shared hit=3
+ANTES | consulta A | execucao 3 | Planning Time: 0.070 ms
+ANTES | consulta A | execucao 3 | Execution Time: 8.334 ms
+ANTES | consulta A | execucao 4 | Nested Loop  (cost=4971.43..4984.51 rows=40 width=34) (actual time=6.947..8.878 rows=40 loops=1)
+ANTES | consulta A | execucao 4 |   Buffers: shared hit=2540
+ANTES | consulta A | execucao 4 |   ->  Gather Merge  (cost=4971.15..4975.71 rows=40 width=21) (actual time=6.931..8.853 rows=40 loops=1)
+ANTES | consulta A | execucao 4 |         Workers Planned: 1
+ANTES | consulta A | execucao 4 |         Workers Launched: 1
+ANTES | consulta A | execucao 4 |         Buffers: shared hit=2537
+ANTES | consulta A | execucao 4 |         ->  Sort  (cost=3971.14..3971.20 rows=24 width=21) (actual time=4.858..4.860 rows=20 loops=2)
+ANTES | consulta A | execucao 4 |               Sort Key: r.data_entrada_prevista
+ANTES | consulta A | execucao 4 |               Sort Method: quicksort  Memory: 26kB
+ANTES | consulta A | execucao 4 |               Buffers: shared hit=2537
+ANTES | consulta A | execucao 4 |               Worker 0:  Sort Method: quicksort  Memory: 25kB
+ANTES | consulta A | execucao 4 |               ->  Parallel Seq Scan on reserva r  (cost=0.00..3970.59 rows=24 width=21) (actual time=0.186..4.814 rows=20 loops=2)
+ANTES | consulta A | execucao 4 |                     Filter: (id_hospede = 4242)
+ANTES | consulta A | execucao 4 |                     Rows Removed by Filter: 99980
+ANTES | consulta A | execucao 4 |                     Buffers: shared hit=2500
+ANTES | consulta A | execucao 4 |   ->  Materialize  (cost=0.28..8.31 rows=1 width=21) (actual time=0.000..0.000 rows=1 loops=40)
+ANTES | consulta A | execucao 4 |         Buffers: shared hit=3
+ANTES | consulta A | execucao 4 |         ->  Index Scan using pk_hospede on hospede h  (cost=0.28..8.30 rows=1 width=21) (actual time=0.011..0.011 rows=1 loops=1)
+ANTES | consulta A | execucao 4 |               Index Cond: (id_hospede = 4242)
+ANTES | consulta A | execucao 4 |               Buffers: shared hit=3
+ANTES | consulta A | execucao 4 | Planning Time: 0.069 ms
+ANTES | consulta A | execucao 4 | Execution Time: 8.897 ms
+ANTES | consulta A | execucao 5 | Nested Loop  (cost=4971.43..4984.51 rows=40 width=34) (actual time=7.410..9.413 rows=40 loops=1)
+ANTES | consulta A | execucao 5 |   Buffers: shared hit=2540
+ANTES | consulta A | execucao 5 |   ->  Gather Merge  (cost=4971.15..4975.71 rows=40 width=21) (actual time=7.387..9.378 rows=40 loops=1)
+ANTES | consulta A | execucao 5 |         Workers Planned: 1
+ANTES | consulta A | execucao 5 |         Workers Launched: 1
+ANTES | consulta A | execucao 5 |         Buffers: shared hit=2537
+ANTES | consulta A | execucao 5 |         ->  Sort  (cost=3971.14..3971.20 rows=24 width=21) (actual time=5.330..5.332 rows=20 loops=2)
+ANTES | consulta A | execucao 5 |               Sort Key: r.data_entrada_prevista
+ANTES | consulta A | execucao 5 |               Sort Method: quicksort  Memory: 26kB
+ANTES | consulta A | execucao 5 |               Buffers: shared hit=2537
+ANTES | consulta A | execucao 5 |               Worker 0:  Sort Method: quicksort  Memory: 25kB
+ANTES | consulta A | execucao 5 |               ->  Parallel Seq Scan on reserva r  (cost=0.00..3970.59 rows=24 width=21) (actual time=0.164..5.272 rows=20 loops=2)
+ANTES | consulta A | execucao 5 |                     Filter: (id_hospede = 4242)
+ANTES | consulta A | execucao 5 |                     Rows Removed by Filter: 99980
+ANTES | consulta A | execucao 5 |                     Buffers: shared hit=2500
+ANTES | consulta A | execucao 5 |   ->  Materialize  (cost=0.28..8.31 rows=1 width=21) (actual time=0.001..0.001 rows=1 loops=40)
+ANTES | consulta A | execucao 5 |         Buffers: shared hit=3
+ANTES | consulta A | execucao 5 |         ->  Index Scan using pk_hospede on hospede h  (cost=0.28..8.30 rows=1 width=21) (actual time=0.015..0.016 rows=1 loops=1)
+ANTES | consulta A | execucao 5 |               Index Cond: (id_hospede = 4242)
+ANTES | consulta A | execucao 5 |               Buffers: shared hit=3
+ANTES | consulta A | execucao 5 | Planning Time: 0.084 ms
+ANTES | consulta A | execucao 5 | Execution Time: 9.433 ms
+ANTES | consulta B | execucao 1 | Gather  (cost=1000.00..4532.21 rows=2 width=24) (actual time=4.713..10.406 rows=2 loops=1)
+ANTES | consulta B | execucao 1 |   Workers Planned: 1
+ANTES | consulta B | execucao 1 |   Workers Launched: 1
+ANTES | consulta B | execucao 1 |   Buffers: shared hit=1767
+ANTES | consulta B | execucao 1 |   ->  Nested Loop  (cost=0.00..3532.01 rows=1 width=24) (actual time=3.960..5.580 rows=1 loops=2)
+ANTES | consulta B | execucao 1 |         Join Filter: (s.id_servico = c.id_servico)
+ANTES | consulta B | execucao 1 |         Rows Removed by Join Filter: 2
+ANTES | consulta B | execucao 1 |         Buffers: shared hit=1767
+ANTES | consulta B | execucao 1 |         ->  Parallel Seq Scan on consumo_servico c  (cost=0.00..3529.71 rows=1 width=13) (actual time=3.937..5.554 rows=1 loops=2)
+ANTES | consulta B | execucao 1 |               Filter: (id_reserva = 166689)
+ANTES | consulta B | execucao 1 |               Rows Removed by Filter: 119999
+ANTES | consulta B | execucao 1 |               Buffers: shared hit=1765
+ANTES | consulta B | execucao 1 |         ->  Seq Scan on servico s  (cost=0.00..1.58 rows=58 width=19) (actual time=0.021..0.021 rows=2 loops=2)
+ANTES | consulta B | execucao 1 |               Buffers: shared hit=2
+ANTES | consulta B | execucao 1 | Planning:
+ANTES | consulta B | execucao 1 |   Buffers: shared hit=45
+ANTES | consulta B | execucao 1 | Planning Time: 0.182 ms
+ANTES | consulta B | execucao 1 | Execution Time: 10.427 ms
+ANTES | consulta B | execucao 2 | Gather  (cost=1000.00..4532.21 rows=2 width=24) (actual time=7.388..9.360 rows=2 loops=1)
+ANTES | consulta B | execucao 2 |   Workers Planned: 1
+ANTES | consulta B | execucao 2 |   Workers Launched: 1
+ANTES | consulta B | execucao 2 |   Buffers: shared hit=1767
+ANTES | consulta B | execucao 2 |   ->  Nested Loop  (cost=0.00..3532.01 rows=1 width=24) (actual time=3.988..5.546 rows=1 loops=2)
+ANTES | consulta B | execucao 2 |         Join Filter: (s.id_servico = c.id_servico)
+ANTES | consulta B | execucao 2 |         Rows Removed by Join Filter: 2
+ANTES | consulta B | execucao 2 |         Buffers: shared hit=1767
+ANTES | consulta B | execucao 2 |         ->  Parallel Seq Scan on consumo_servico c  (cost=0.00..3529.71 rows=1 width=13) (actual time=3.976..5.530 rows=1 loops=2)
+ANTES | consulta B | execucao 2 |               Filter: (id_reserva = 166689)
+ANTES | consulta B | execucao 2 |               Rows Removed by Filter: 119999
+ANTES | consulta B | execucao 2 |               Buffers: shared hit=1765
+ANTES | consulta B | execucao 2 |         ->  Seq Scan on servico s  (cost=0.00..1.58 rows=58 width=19) (actual time=0.009..0.009 rows=2 loops=2)
+ANTES | consulta B | execucao 2 |               Buffers: shared hit=2
+ANTES | consulta B | execucao 2 | Planning:
+ANTES | consulta B | execucao 2 |   Buffers: shared hit=2
+ANTES | consulta B | execucao 2 | Planning Time: 0.083 ms
+ANTES | consulta B | execucao 2 | Execution Time: 9.372 ms
+ANTES | consulta B | execucao 3 | Gather  (cost=1000.00..4532.21 rows=2 width=24) (actual time=7.466..9.519 rows=2 loops=1)
+ANTES | consulta B | execucao 3 |   Workers Planned: 1
+ANTES | consulta B | execucao 3 |   Workers Launched: 1
+ANTES | consulta B | execucao 3 |   Buffers: shared hit=1767
+ANTES | consulta B | execucao 3 |   ->  Nested Loop  (cost=0.00..3532.01 rows=1 width=24) (actual time=4.119..5.706 rows=1 loops=2)
+ANTES | consulta B | execucao 3 |         Join Filter: (s.id_servico = c.id_servico)
+ANTES | consulta B | execucao 3 |         Rows Removed by Join Filter: 2
+ANTES | consulta B | execucao 3 |         Buffers: shared hit=1767
+ANTES | consulta B | execucao 3 |         ->  Parallel Seq Scan on consumo_servico c  (cost=0.00..3529.71 rows=1 width=13) (actual time=4.109..5.691 rows=1 loops=2)
+ANTES | consulta B | execucao 3 |               Filter: (id_reserva = 166689)
+ANTES | consulta B | execucao 3 |               Rows Removed by Filter: 119999
+ANTES | consulta B | execucao 3 |               Buffers: shared hit=1765
+ANTES | consulta B | execucao 3 |         ->  Seq Scan on servico s  (cost=0.00..1.58 rows=58 width=19) (actual time=0.008..0.008 rows=2 loops=2)
+ANTES | consulta B | execucao 3 |               Buffers: shared hit=2
+ANTES | consulta B | execucao 3 | Planning:
+ANTES | consulta B | execucao 3 |   Buffers: shared hit=2
+ANTES | consulta B | execucao 3 | Planning Time: 0.087 ms
+ANTES | consulta B | execucao 3 | Execution Time: 9.529 ms
+ANTES | consulta B | execucao 4 | Gather  (cost=1000.00..4532.21 rows=2 width=24) (actual time=4.076..9.227 rows=2 loops=1)
+ANTES | consulta B | execucao 4 |   Workers Planned: 1
+ANTES | consulta B | execucao 4 |   Workers Launched: 1
+ANTES | consulta B | execucao 4 |   Buffers: shared hit=1767
+ANTES | consulta B | execucao 4 |   ->  Nested Loop  (cost=0.00..3532.01 rows=1 width=24) (actual time=3.848..5.363 rows=1 loops=2)
+ANTES | consulta B | execucao 4 |         Join Filter: (s.id_servico = c.id_servico)
+ANTES | consulta B | execucao 4 |         Rows Removed by Join Filter: 2
+ANTES | consulta B | execucao 4 |         Buffers: shared hit=1767
+ANTES | consulta B | execucao 4 |         ->  Parallel Seq Scan on consumo_servico c  (cost=0.00..3529.71 rows=1 width=13) (actual time=3.844..5.355 rows=1 loops=2)
+ANTES | consulta B | execucao 4 |               Filter: (id_reserva = 166689)
+ANTES | consulta B | execucao 4 |               Rows Removed by Filter: 119999
+ANTES | consulta B | execucao 4 |               Buffers: shared hit=1765
+ANTES | consulta B | execucao 4 |         ->  Seq Scan on servico s  (cost=0.00..1.58 rows=58 width=19) (actual time=0.004..0.004 rows=2 loops=2)
+ANTES | consulta B | execucao 4 |               Buffers: shared hit=2
+ANTES | consulta B | execucao 4 | Planning:
+ANTES | consulta B | execucao 4 |   Buffers: shared hit=2
+ANTES | consulta B | execucao 4 | Planning Time: 0.086 ms
+ANTES | consulta B | execucao 4 | Execution Time: 9.240 ms
+ANTES | consulta B | execucao 5 | Gather  (cost=1000.00..4532.21 rows=2 width=24) (actual time=4.378..9.245 rows=2 loops=1)
+ANTES | consulta B | execucao 5 |   Workers Planned: 1
+ANTES | consulta B | execucao 5 |   Workers Launched: 1
+ANTES | consulta B | execucao 5 |   Buffers: shared hit=1767
+ANTES | consulta B | execucao 5 |   ->  Nested Loop  (cost=0.00..3532.01 rows=1 width=24) (actual time=3.670..5.455 rows=1 loops=2)
+ANTES | consulta B | execucao 5 |         Join Filter: (s.id_servico = c.id_servico)
+ANTES | consulta B | execucao 5 |         Rows Removed by Join Filter: 2
+ANTES | consulta B | execucao 5 |         Buffers: shared hit=1767
+ANTES | consulta B | execucao 5 |         ->  Parallel Seq Scan on consumo_servico c  (cost=0.00..3529.71 rows=1 width=13) (actual time=3.654..5.438 rows=1 loops=2)
+ANTES | consulta B | execucao 5 |               Filter: (id_reserva = 166689)
+ANTES | consulta B | execucao 5 |               Rows Removed by Filter: 119999
+ANTES | consulta B | execucao 5 |               Buffers: shared hit=1765
+ANTES | consulta B | execucao 5 |         ->  Seq Scan on servico s  (cost=0.00..1.58 rows=58 width=19) (actual time=0.012..0.012 rows=2 loops=2)
+ANTES | consulta B | execucao 5 |               Buffers: shared hit=2
+ANTES | consulta B | execucao 5 | Planning:
+ANTES | consulta B | execucao 5 |   Buffers: shared hit=2
+ANTES | consulta B | execucao 5 | Planning Time: 0.094 ms
+ANTES | consulta B | execucao 5 | Execution Time: 9.256 ms
+ANTES | consulta C | execucao 1 | Gather Merge  (cost=6445.79..6460.86 rows=131 width=16) (actual time=9.690..11.869 rows=182 loops=1)
+ANTES | consulta C | execucao 1 |   Workers Planned: 1
+ANTES | consulta C | execucao 1 |   Workers Launched: 1
+ANTES | consulta C | execucao 1 |   Buffers: shared hit=2537
+ANTES | consulta C | execucao 1 |   ->  Sort  (cost=5445.78..5446.11 rows=131 width=16) (actual time=7.584..7.588 rows=91 loops=2)
+ANTES | consulta C | execucao 1 |         Sort Key: data_entrada_prevista
+ANTES | consulta C | execucao 1 |         Sort Method: quicksort  Memory: 28kB
+ANTES | consulta C | execucao 1 |         Buffers: shared hit=2537
+ANTES | consulta C | execucao 1 |         Worker 0:  Sort Method: quicksort  Memory: 26kB
+ANTES | consulta C | execucao 1 |         ->  Parallel Seq Scan on reserva r  (cost=0.00..5441.18 rows=131 width=16) (actual time=0.048..7.500 rows=91 loops=2)
+ANTES | consulta C | execucao 1 |               Filter: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+ANTES | consulta C | execucao 1 |               Rows Removed by Filter: 99909
+ANTES | consulta C | execucao 1 |               Buffers: shared hit=2500
+ANTES | consulta C | execucao 1 | Planning:
+ANTES | consulta C | execucao 1 |   Buffers: shared hit=9
+ANTES | consulta C | execucao 1 | Planning Time: 0.070 ms
+ANTES | consulta C | execucao 1 | Execution Time: 11.887 ms
+ANTES | consulta C | execucao 2 | Gather Merge  (cost=6445.79..6460.86 rows=131 width=16) (actual time=9.116..11.375 rows=182 loops=1)
+ANTES | consulta C | execucao 2 |   Workers Planned: 1
+ANTES | consulta C | execucao 2 |   Workers Launched: 1
+ANTES | consulta C | execucao 2 |   Buffers: shared hit=2537
+ANTES | consulta C | execucao 2 |   ->  Sort  (cost=5445.78..5446.11 rows=131 width=16) (actual time=7.301..7.304 rows=91 loops=2)
+ANTES | consulta C | execucao 2 |         Sort Key: data_entrada_prevista
+ANTES | consulta C | execucao 2 |         Sort Method: quicksort  Memory: 28kB
+ANTES | consulta C | execucao 2 |         Buffers: shared hit=2537
+ANTES | consulta C | execucao 2 |         Worker 0:  Sort Method: quicksort  Memory: 27kB
+ANTES | consulta C | execucao 2 |         ->  Parallel Seq Scan on reserva r  (cost=0.00..5441.18 rows=131 width=16) (actual time=0.083..7.252 rows=91 loops=2)
+ANTES | consulta C | execucao 2 |               Filter: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+ANTES | consulta C | execucao 2 |               Rows Removed by Filter: 99909
+ANTES | consulta C | execucao 2 |               Buffers: shared hit=2500
+ANTES | consulta C | execucao 2 | Planning Time: 0.058 ms
+ANTES | consulta C | execucao 2 | Execution Time: 11.393 ms
+ANTES | consulta C | execucao 3 | Gather Merge  (cost=6445.79..6460.86 rows=131 width=16) (actual time=10.863..13.081 rows=182 loops=1)
+ANTES | consulta C | execucao 3 |   Workers Planned: 1
+ANTES | consulta C | execucao 3 |   Workers Launched: 1
+ANTES | consulta C | execucao 3 |   Buffers: shared hit=2537
+ANTES | consulta C | execucao 3 |   ->  Sort  (cost=5445.78..5446.11 rows=131 width=16) (actual time=9.018..9.022 rows=91 loops=2)
+ANTES | consulta C | execucao 3 |         Sort Key: data_entrada_prevista
+ANTES | consulta C | execucao 3 |         Sort Method: quicksort  Memory: 28kB
+ANTES | consulta C | execucao 3 |         Buffers: shared hit=2537
+ANTES | consulta C | execucao 3 |         Worker 0:  Sort Method: quicksort  Memory: 27kB
+ANTES | consulta C | execucao 3 |         ->  Parallel Seq Scan on reserva r  (cost=0.00..5441.18 rows=131 width=16) (actual time=0.081..8.949 rows=91 loops=2)
+ANTES | consulta C | execucao 3 |               Filter: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+ANTES | consulta C | execucao 3 |               Rows Removed by Filter: 99909
+ANTES | consulta C | execucao 3 |               Buffers: shared hit=2500
+ANTES | consulta C | execucao 3 | Planning Time: 0.057 ms
+ANTES | consulta C | execucao 3 | Execution Time: 13.099 ms
+ANTES | consulta C | execucao 4 | Gather Merge  (cost=6445.79..6460.86 rows=131 width=16) (actual time=9.239..11.362 rows=182 loops=1)
+ANTES | consulta C | execucao 4 |   Workers Planned: 1
+ANTES | consulta C | execucao 4 |   Workers Launched: 1
+ANTES | consulta C | execucao 4 |   Buffers: shared hit=2537
+ANTES | consulta C | execucao 4 |   ->  Sort  (cost=5445.78..5446.11 rows=131 width=16) (actual time=7.330..7.334 rows=91 loops=2)
+ANTES | consulta C | execucao 4 |         Sort Key: data_entrada_prevista
+ANTES | consulta C | execucao 4 |         Sort Method: quicksort  Memory: 28kB
+ANTES | consulta C | execucao 4 |         Buffers: shared hit=2537
+ANTES | consulta C | execucao 4 |         Worker 0:  Sort Method: quicksort  Memory: 26kB
+ANTES | consulta C | execucao 4 |         ->  Parallel Seq Scan on reserva r  (cost=0.00..5441.18 rows=131 width=16) (actual time=0.144..7.261 rows=91 loops=2)
+ANTES | consulta C | execucao 4 |               Filter: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+ANTES | consulta C | execucao 4 |               Rows Removed by Filter: 99909
+ANTES | consulta C | execucao 4 |               Buffers: shared hit=2500
+ANTES | consulta C | execucao 4 | Planning Time: 0.056 ms
+ANTES | consulta C | execucao 4 | Execution Time: 11.377 ms
+ANTES | consulta C | execucao 5 | Gather Merge  (cost=6445.79..6460.86 rows=131 width=16) (actual time=10.021..12.287 rows=182 loops=1)
+ANTES | consulta C | execucao 5 |   Workers Planned: 1
+ANTES | consulta C | execucao 5 |   Workers Launched: 1
+ANTES | consulta C | execucao 5 |   Buffers: shared hit=2537
+ANTES | consulta C | execucao 5 |   ->  Sort  (cost=5445.78..5446.11 rows=131 width=16) (actual time=8.133..8.136 rows=91 loops=2)
+ANTES | consulta C | execucao 5 |         Sort Key: data_entrada_prevista
+ANTES | consulta C | execucao 5 |         Sort Method: quicksort  Memory: 28kB
+ANTES | consulta C | execucao 5 |         Buffers: shared hit=2537
+ANTES | consulta C | execucao 5 |         Worker 0:  Sort Method: quicksort  Memory: 27kB
+ANTES | consulta C | execucao 5 |         ->  Parallel Seq Scan on reserva r  (cost=0.00..5441.18 rows=131 width=16) (actual time=0.068..8.058 rows=91 loops=2)
+ANTES | consulta C | execucao 5 |               Filter: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+ANTES | consulta C | execucao 5 |               Rows Removed by Filter: 99909
+ANTES | consulta C | execucao 5 |               Buffers: shared hit=2500
+ANTES | consulta C | execucao 5 | Planning Time: 0.058 ms
+ANTES | consulta C | execucao 5 | Execution Time: 12.304 ms
+ANTES | consulta D | execucao 1 | Gather  (cost=1000.00..7176.97 rows=5 width=12) (actual time=8.539..10.597 rows=0 loops=1)
+ANTES | consulta D | execucao 1 |   Workers Planned: 1
+ANTES | consulta D | execucao 1 |   Workers Launched: 1
+ANTES | consulta D | execucao 1 |   Buffers: shared hit=2503
+ANTES | consulta D | execucao 1 |   ->  Parallel Seq Scan on reserva r  (cost=0.00..6176.47 rows=3 width=12) (actual time=6.512..6.512 rows=0 loops=2)
+ANTES | consulta D | execucao 1 |         Filter: ((id_quarto = 77) AND ((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)) AND (data_saida_prevista > (CURRENT_DATE + 8)))
+ANTES | consulta D | execucao 1 |         Rows Removed by Filter: 100000
+ANTES | consulta D | execucao 1 |         Buffers: shared hit=2503
+ANTES | consulta D | execucao 1 | Planning:
+ANTES | consulta D | execucao 1 |   Buffers: shared hit=54
+ANTES | consulta D | execucao 1 | Planning Time: 0.148 ms
+ANTES | consulta D | execucao 1 | Execution Time: 10.608 ms
+ANTES | consulta D | execucao 2 | Gather  (cost=1000.00..7176.97 rows=5 width=12) (actual time=8.148..10.296 rows=0 loops=1)
+ANTES | consulta D | execucao 2 |   Workers Planned: 1
+ANTES | consulta D | execucao 2 |   Workers Launched: 1
+ANTES | consulta D | execucao 2 |   Buffers: shared hit=2503
+ANTES | consulta D | execucao 2 |   ->  Parallel Seq Scan on reserva r  (cost=0.00..6176.47 rows=3 width=12) (actual time=6.421..6.421 rows=0 loops=2)
+ANTES | consulta D | execucao 2 |         Filter: ((id_quarto = 77) AND ((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)) AND (data_saida_prevista > (CURRENT_DATE + 8)))
+ANTES | consulta D | execucao 2 |         Rows Removed by Filter: 100000
+ANTES | consulta D | execucao 2 |         Buffers: shared hit=2503
+ANTES | consulta D | execucao 2 | Planning Time: 0.077 ms
+ANTES | consulta D | execucao 2 | Execution Time: 10.309 ms
+ANTES | consulta D | execucao 3 | Gather  (cost=1000.00..7176.97 rows=5 width=12) (actual time=8.245..10.319 rows=0 loops=1)
+ANTES | consulta D | execucao 3 |   Workers Planned: 1
+ANTES | consulta D | execucao 3 |   Workers Launched: 1
+ANTES | consulta D | execucao 3 |   Buffers: shared hit=2503
+ANTES | consulta D | execucao 3 |   ->  Parallel Seq Scan on reserva r  (cost=0.00..6176.47 rows=3 width=12) (actual time=6.447..6.448 rows=0 loops=2)
+ANTES | consulta D | execucao 3 |         Filter: ((id_quarto = 77) AND ((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)) AND (data_saida_prevista > (CURRENT_DATE + 8)))
+ANTES | consulta D | execucao 3 |         Rows Removed by Filter: 100000
+ANTES | consulta D | execucao 3 |         Buffers: shared hit=2503
+ANTES | consulta D | execucao 3 | Planning Time: 0.060 ms
+ANTES | consulta D | execucao 3 | Execution Time: 10.328 ms
+ANTES | consulta D | execucao 4 | Gather  (cost=1000.00..7176.97 rows=5 width=12) (actual time=8.387..10.219 rows=0 loops=1)
+ANTES | consulta D | execucao 4 |   Workers Planned: 1
+ANTES | consulta D | execucao 4 |   Workers Launched: 1
+ANTES | consulta D | execucao 4 |   Buffers: shared hit=2503
+ANTES | consulta D | execucao 4 |   ->  Parallel Seq Scan on reserva r  (cost=0.00..6176.47 rows=3 width=12) (actual time=6.330..6.330 rows=0 loops=2)
+ANTES | consulta D | execucao 4 |         Filter: ((id_quarto = 77) AND ((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)) AND (data_saida_prevista > (CURRENT_DATE + 8)))
+ANTES | consulta D | execucao 4 |         Rows Removed by Filter: 100000
+ANTES | consulta D | execucao 4 |         Buffers: shared hit=2503
+ANTES | consulta D | execucao 4 | Planning Time: 0.063 ms
+ANTES | consulta D | execucao 4 | Execution Time: 10.228 ms
+ANTES | consulta D | execucao 5 | Gather  (cost=1000.00..7176.97 rows=5 width=12) (actual time=8.158..10.193 rows=0 loops=1)
+ANTES | consulta D | execucao 5 |   Workers Planned: 1
+ANTES | consulta D | execucao 5 |   Workers Launched: 1
+ANTES | consulta D | execucao 5 |   Buffers: shared hit=2503
+ANTES | consulta D | execucao 5 |   ->  Parallel Seq Scan on reserva r  (cost=0.00..6176.47 rows=3 width=12) (actual time=6.178..6.178 rows=0 loops=2)
+ANTES | consulta D | execucao 5 |         Filter: ((id_quarto = 77) AND ((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)) AND (data_saida_prevista > (CURRENT_DATE + 8)))
+ANTES | consulta D | execucao 5 |         Rows Removed by Filter: 100000
+ANTES | consulta D | execucao 5 |         Buffers: shared hit=2503
+ANTES | consulta D | execucao 5 | Planning Time: 0.056 ms
+ANTES | consulta D | execucao 5 | Execution Time: 10.202 ms
+DEPOIS | consulta A | execucao 1 | Sort  (cost=159.69..159.79 rows=40 width=34) (actual time=0.084..0.086 rows=40 loops=1)
+DEPOIS | consulta A | execucao 1 |   Sort Key: r.data_entrada_prevista
+DEPOIS | consulta A | execucao 1 |   Sort Method: quicksort  Memory: 27kB
+DEPOIS | consulta A | execucao 1 |   Buffers: shared hit=43 read=2
+DEPOIS | consulta A | execucao 1 |   ->  Nested Loop  (cost=4.89..158.63 rows=40 width=34) (actual time=0.035..0.076 rows=40 loops=1)
+DEPOIS | consulta A | execucao 1 |         Buffers: shared hit=43 read=2
+DEPOIS | consulta A | execucao 1 |         ->  Index Scan using pk_hospede on hospede h  (cost=0.28..8.30 rows=1 width=21) (actual time=0.005..0.005 rows=1 loops=1)
+DEPOIS | consulta A | execucao 1 |               Index Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 1 |               Buffers: shared hit=3
+DEPOIS | consulta A | execucao 1 |         ->  Bitmap Heap Scan on reserva r  (cost=4.60..149.93 rows=40 width=21) (actual time=0.028..0.064 rows=40 loops=1)
+DEPOIS | consulta A | execucao 1 |               Recheck Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 1 |               Heap Blocks: exact=40
+DEPOIS | consulta A | execucao 1 |               Buffers: shared hit=40 read=2
+DEPOIS | consulta A | execucao 1 |               ->  Bitmap Index Scan on idx_reserva_hospede  (cost=0.00..4.59 rows=40 width=0) (actual time=0.021..0.021 rows=40 loops=1)
+DEPOIS | consulta A | execucao 1 |                     Index Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 1 |                     Buffers: shared read=2
+DEPOIS | consulta A | execucao 1 | Planning:
+DEPOIS | consulta A | execucao 1 |   Buffers: shared hit=20 read=3
+DEPOIS | consulta A | execucao 1 | Planning Time: 0.142 ms
+DEPOIS | consulta A | execucao 1 | Execution Time: 0.098 ms
+DEPOIS | consulta A | execucao 2 | Sort  (cost=159.69..159.79 rows=40 width=34) (actual time=0.031..0.032 rows=40 loops=1)
+DEPOIS | consulta A | execucao 2 |   Sort Key: r.data_entrada_prevista
+DEPOIS | consulta A | execucao 2 |   Sort Method: quicksort  Memory: 27kB
+DEPOIS | consulta A | execucao 2 |   Buffers: shared hit=45
+DEPOIS | consulta A | execucao 2 |   ->  Nested Loop  (cost=4.89..158.63 rows=40 width=34) (actual time=0.010..0.025 rows=40 loops=1)
+DEPOIS | consulta A | execucao 2 |         Buffers: shared hit=45
+DEPOIS | consulta A | execucao 2 |         ->  Index Scan using pk_hospede on hospede h  (cost=0.28..8.30 rows=1 width=21) (actual time=0.003..0.003 rows=1 loops=1)
+DEPOIS | consulta A | execucao 2 |               Index Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 2 |               Buffers: shared hit=3
+DEPOIS | consulta A | execucao 2 |         ->  Bitmap Heap Scan on reserva r  (cost=4.60..149.93 rows=40 width=21) (actual time=0.006..0.017 rows=40 loops=1)
+DEPOIS | consulta A | execucao 2 |               Recheck Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 2 |               Heap Blocks: exact=40
+DEPOIS | consulta A | execucao 2 |               Buffers: shared hit=42
+DEPOIS | consulta A | execucao 2 |               ->  Bitmap Index Scan on idx_reserva_hospede  (cost=0.00..4.59 rows=40 width=0) (actual time=0.002..0.002 rows=40 loops=1)
+DEPOIS | consulta A | execucao 2 |                     Index Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 2 |                     Buffers: shared hit=2
+DEPOIS | consulta A | execucao 2 | Planning Time: 0.051 ms
+DEPOIS | consulta A | execucao 2 | Execution Time: 0.041 ms
+DEPOIS | consulta A | execucao 3 | Sort  (cost=159.69..159.79 rows=40 width=34) (actual time=0.028..0.030 rows=40 loops=1)
+DEPOIS | consulta A | execucao 3 |   Sort Key: r.data_entrada_prevista
+DEPOIS | consulta A | execucao 3 |   Sort Method: quicksort  Memory: 27kB
+DEPOIS | consulta A | execucao 3 |   Buffers: shared hit=45
+DEPOIS | consulta A | execucao 3 |   ->  Nested Loop  (cost=4.89..158.63 rows=40 width=34) (actual time=0.008..0.023 rows=40 loops=1)
+DEPOIS | consulta A | execucao 3 |         Buffers: shared hit=45
+DEPOIS | consulta A | execucao 3 |         ->  Index Scan using pk_hospede on hospede h  (cost=0.28..8.30 rows=1 width=21) (actual time=0.003..0.003 rows=1 loops=1)
+DEPOIS | consulta A | execucao 3 |               Index Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 3 |               Buffers: shared hit=3
+DEPOIS | consulta A | execucao 3 |         ->  Bitmap Heap Scan on reserva r  (cost=4.60..149.93 rows=40 width=21) (actual time=0.005..0.015 rows=40 loops=1)
+DEPOIS | consulta A | execucao 3 |               Recheck Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 3 |               Heap Blocks: exact=40
+DEPOIS | consulta A | execucao 3 |               Buffers: shared hit=42
+DEPOIS | consulta A | execucao 3 |               ->  Bitmap Index Scan on idx_reserva_hospede  (cost=0.00..4.59 rows=40 width=0) (actual time=0.002..0.002 rows=40 loops=1)
+DEPOIS | consulta A | execucao 3 |                     Index Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 3 |                     Buffers: shared hit=2
+DEPOIS | consulta A | execucao 3 | Planning Time: 0.032 ms
+DEPOIS | consulta A | execucao 3 | Execution Time: 0.038 ms
+DEPOIS | consulta A | execucao 4 | Sort  (cost=159.69..159.79 rows=40 width=34) (actual time=0.028..0.029 rows=40 loops=1)
+DEPOIS | consulta A | execucao 4 |   Sort Key: r.data_entrada_prevista
+DEPOIS | consulta A | execucao 4 |   Sort Method: quicksort  Memory: 27kB
+DEPOIS | consulta A | execucao 4 |   Buffers: shared hit=45
+DEPOIS | consulta A | execucao 4 |   ->  Nested Loop  (cost=4.89..158.63 rows=40 width=34) (actual time=0.008..0.023 rows=40 loops=1)
+DEPOIS | consulta A | execucao 4 |         Buffers: shared hit=45
+DEPOIS | consulta A | execucao 4 |         ->  Index Scan using pk_hospede on hospede h  (cost=0.28..8.30 rows=1 width=21) (actual time=0.003..0.003 rows=1 loops=1)
+DEPOIS | consulta A | execucao 4 |               Index Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 4 |               Buffers: shared hit=3
+DEPOIS | consulta A | execucao 4 |         ->  Bitmap Heap Scan on reserva r  (cost=4.60..149.93 rows=40 width=21) (actual time=0.005..0.015 rows=40 loops=1)
+DEPOIS | consulta A | execucao 4 |               Recheck Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 4 |               Heap Blocks: exact=40
+DEPOIS | consulta A | execucao 4 |               Buffers: shared hit=42
+DEPOIS | consulta A | execucao 4 |               ->  Bitmap Index Scan on idx_reserva_hospede  (cost=0.00..4.59 rows=40 width=0) (actual time=0.002..0.002 rows=40 loops=1)
+DEPOIS | consulta A | execucao 4 |                     Index Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 4 |                     Buffers: shared hit=2
+DEPOIS | consulta A | execucao 4 | Planning Time: 0.031 ms
+DEPOIS | consulta A | execucao 4 | Execution Time: 0.037 ms
+DEPOIS | consulta A | execucao 5 | Sort  (cost=159.69..159.79 rows=40 width=34) (actual time=0.028..0.030 rows=40 loops=1)
+DEPOIS | consulta A | execucao 5 |   Sort Key: r.data_entrada_prevista
+DEPOIS | consulta A | execucao 5 |   Sort Method: quicksort  Memory: 27kB
+DEPOIS | consulta A | execucao 5 |   Buffers: shared hit=45
+DEPOIS | consulta A | execucao 5 |   ->  Nested Loop  (cost=4.89..158.63 rows=40 width=34) (actual time=0.008..0.023 rows=40 loops=1)
+DEPOIS | consulta A | execucao 5 |         Buffers: shared hit=45
+DEPOIS | consulta A | execucao 5 |         ->  Index Scan using pk_hospede on hospede h  (cost=0.28..8.30 rows=1 width=21) (actual time=0.003..0.003 rows=1 loops=1)
+DEPOIS | consulta A | execucao 5 |               Index Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 5 |               Buffers: shared hit=3
+DEPOIS | consulta A | execucao 5 |         ->  Bitmap Heap Scan on reserva r  (cost=4.60..149.93 rows=40 width=21) (actual time=0.005..0.015 rows=40 loops=1)
+DEPOIS | consulta A | execucao 5 |               Recheck Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 5 |               Heap Blocks: exact=40
+DEPOIS | consulta A | execucao 5 |               Buffers: shared hit=42
+DEPOIS | consulta A | execucao 5 |               ->  Bitmap Index Scan on idx_reserva_hospede  (cost=0.00..4.59 rows=40 width=0) (actual time=0.002..0.002 rows=40 loops=1)
+DEPOIS | consulta A | execucao 5 |                     Index Cond: (id_hospede = 4242)
+DEPOIS | consulta A | execucao 5 |                     Buffers: shared hit=2
+DEPOIS | consulta A | execucao 5 | Planning Time: 0.033 ms
+DEPOIS | consulta A | execucao 5 | Execution Time: 0.038 ms
+DEPOIS | consulta B | execucao 1 | Merge Join  (cost=11.56..12.04 rows=2 width=24) (actual time=0.050..0.051 rows=2 loops=1)
+DEPOIS | consulta B | execucao 1 |   Merge Cond: (s.id_servico = c.id_servico)
+DEPOIS | consulta B | execucao 1 |   Buffers: shared hit=4 read=3
+DEPOIS | consulta B | execucao 1 |   ->  Index Scan using pk_servico on servico s  (cost=0.14..13.01 rows=58 width=19) (actual time=0.002..0.003 rows=4 loops=1)
+DEPOIS | consulta B | execucao 1 |         Buffers: shared hit=2
+DEPOIS | consulta B | execucao 1 |   ->  Sort  (cost=11.42..11.43 rows=2 width=13) (actual time=0.045..0.045 rows=2 loops=1)
+DEPOIS | consulta B | execucao 1 |         Sort Key: c.id_servico
+DEPOIS | consulta B | execucao 1 |         Sort Method: quicksort  Memory: 25kB
+DEPOIS | consulta B | execucao 1 |         Buffers: shared hit=2 read=3
+DEPOIS | consulta B | execucao 1 |         ->  Index Scan using idx_consumo_reserva on consumo_servico c  (cost=0.42..11.41 rows=2 width=13) (actual time=0.040..0.042 rows=2 loops=1)
+DEPOIS | consulta B | execucao 1 |               Index Cond: (id_reserva = 166689)
+DEPOIS | consulta B | execucao 1 |               Buffers: shared hit=2 read=3
+DEPOIS | consulta B | execucao 1 | Planning:
+DEPOIS | consulta B | execucao 1 |   Buffers: shared hit=11
+DEPOIS | consulta B | execucao 1 | Planning Time: 0.132 ms
+DEPOIS | consulta B | execucao 1 | Execution Time: 0.064 ms
+DEPOIS | consulta B | execucao 2 | Merge Join  (cost=11.56..12.04 rows=2 width=24) (actual time=0.008..0.009 rows=2 loops=1)
+DEPOIS | consulta B | execucao 2 |   Merge Cond: (s.id_servico = c.id_servico)
+DEPOIS | consulta B | execucao 2 |   Buffers: shared hit=7
+DEPOIS | consulta B | execucao 2 |   ->  Index Scan using pk_servico on servico s  (cost=0.14..13.01 rows=58 width=19) (actual time=0.002..0.002 rows=4 loops=1)
+DEPOIS | consulta B | execucao 2 |         Buffers: shared hit=2
+DEPOIS | consulta B | execucao 2 |   ->  Sort  (cost=11.42..11.43 rows=2 width=13) (actual time=0.005..0.005 rows=2 loops=1)
+DEPOIS | consulta B | execucao 2 |         Sort Key: c.id_servico
+DEPOIS | consulta B | execucao 2 |         Sort Method: quicksort  Memory: 25kB
+DEPOIS | consulta B | execucao 2 |         Buffers: shared hit=5
+DEPOIS | consulta B | execucao 2 |         ->  Index Scan using idx_consumo_reserva on consumo_servico c  (cost=0.42..11.41 rows=2 width=13) (actual time=0.002..0.003 rows=2 loops=1)
+DEPOIS | consulta B | execucao 2 |               Index Cond: (id_reserva = 166689)
+DEPOIS | consulta B | execucao 2 |               Buffers: shared hit=5
+DEPOIS | consulta B | execucao 2 | Planning:
+DEPOIS | consulta B | execucao 2 |   Buffers: shared hit=2
+DEPOIS | consulta B | execucao 2 | Planning Time: 0.046 ms
+DEPOIS | consulta B | execucao 2 | Execution Time: 0.016 ms
+DEPOIS | consulta B | execucao 3 | Merge Join  (cost=11.56..12.04 rows=2 width=24) (actual time=0.007..0.008 rows=2 loops=1)
+DEPOIS | consulta B | execucao 3 |   Merge Cond: (s.id_servico = c.id_servico)
+DEPOIS | consulta B | execucao 3 |   Buffers: shared hit=7
+DEPOIS | consulta B | execucao 3 |   ->  Index Scan using pk_servico on servico s  (cost=0.14..13.01 rows=58 width=19) (actual time=0.002..0.002 rows=4 loops=1)
+DEPOIS | consulta B | execucao 3 |         Buffers: shared hit=2
+DEPOIS | consulta B | execucao 3 |   ->  Sort  (cost=11.42..11.43 rows=2 width=13) (actual time=0.004..0.004 rows=2 loops=1)
+DEPOIS | consulta B | execucao 3 |         Sort Key: c.id_servico
+DEPOIS | consulta B | execucao 3 |         Sort Method: quicksort  Memory: 25kB
+DEPOIS | consulta B | execucao 3 |         Buffers: shared hit=5
+DEPOIS | consulta B | execucao 3 |         ->  Index Scan using idx_consumo_reserva on consumo_servico c  (cost=0.42..11.41 rows=2 width=13) (actual time=0.002..0.003 rows=2 loops=1)
+DEPOIS | consulta B | execucao 3 |               Index Cond: (id_reserva = 166689)
+DEPOIS | consulta B | execucao 3 |               Buffers: shared hit=5
+DEPOIS | consulta B | execucao 3 | Planning:
+DEPOIS | consulta B | execucao 3 |   Buffers: shared hit=2
+DEPOIS | consulta B | execucao 3 | Planning Time: 0.041 ms
+DEPOIS | consulta B | execucao 3 | Execution Time: 0.014 ms
+DEPOIS | consulta B | execucao 4 | Merge Join  (cost=11.56..12.04 rows=2 width=24) (actual time=0.008..0.009 rows=2 loops=1)
+DEPOIS | consulta B | execucao 4 |   Merge Cond: (s.id_servico = c.id_servico)
+DEPOIS | consulta B | execucao 4 |   Buffers: shared hit=7
+DEPOIS | consulta B | execucao 4 |   ->  Index Scan using pk_servico on servico s  (cost=0.14..13.01 rows=58 width=19) (actual time=0.002..0.002 rows=4 loops=1)
+DEPOIS | consulta B | execucao 4 |         Buffers: shared hit=2
+DEPOIS | consulta B | execucao 4 |   ->  Sort  (cost=11.42..11.43 rows=2 width=13) (actual time=0.005..0.005 rows=2 loops=1)
+DEPOIS | consulta B | execucao 4 |         Sort Key: c.id_servico
+DEPOIS | consulta B | execucao 4 |         Sort Method: quicksort  Memory: 25kB
+DEPOIS | consulta B | execucao 4 |         Buffers: shared hit=5
+DEPOIS | consulta B | execucao 4 |         ->  Index Scan using idx_consumo_reserva on consumo_servico c  (cost=0.42..11.41 rows=2 width=13) (actual time=0.002..0.003 rows=2 loops=1)
+DEPOIS | consulta B | execucao 4 |               Index Cond: (id_reserva = 166689)
+DEPOIS | consulta B | execucao 4 |               Buffers: shared hit=5
+DEPOIS | consulta B | execucao 4 | Planning:
+DEPOIS | consulta B | execucao 4 |   Buffers: shared hit=2
+DEPOIS | consulta B | execucao 4 | Planning Time: 0.071 ms
+DEPOIS | consulta B | execucao 4 | Execution Time: 0.016 ms
+DEPOIS | consulta B | execucao 5 | Merge Join  (cost=11.56..12.04 rows=2 width=24) (actual time=0.007..0.009 rows=2 loops=1)
+DEPOIS | consulta B | execucao 5 |   Merge Cond: (s.id_servico = c.id_servico)
+DEPOIS | consulta B | execucao 5 |   Buffers: shared hit=7
+DEPOIS | consulta B | execucao 5 |   ->  Index Scan using pk_servico on servico s  (cost=0.14..13.01 rows=58 width=19) (actual time=0.002..0.002 rows=4 loops=1)
+DEPOIS | consulta B | execucao 5 |         Buffers: shared hit=2
+DEPOIS | consulta B | execucao 5 |   ->  Sort  (cost=11.42..11.43 rows=2 width=13) (actual time=0.004..0.005 rows=2 loops=1)
+DEPOIS | consulta B | execucao 5 |         Sort Key: c.id_servico
+DEPOIS | consulta B | execucao 5 |         Sort Method: quicksort  Memory: 25kB
+DEPOIS | consulta B | execucao 5 |         Buffers: shared hit=5
+DEPOIS | consulta B | execucao 5 |         ->  Index Scan using idx_consumo_reserva on consumo_servico c  (cost=0.42..11.41 rows=2 width=13) (actual time=0.002..0.003 rows=2 loops=1)
+DEPOIS | consulta B | execucao 5 |               Index Cond: (id_reserva = 166689)
+DEPOIS | consulta B | execucao 5 |               Buffers: shared hit=5
+DEPOIS | consulta B | execucao 5 | Planning:
+DEPOIS | consulta B | execucao 5 |   Buffers: shared hit=2
+DEPOIS | consulta B | execucao 5 | Planning Time: 0.046 ms
+DEPOIS | consulta B | execucao 5 | Execution Time: 0.016 ms
+DEPOIS | consulta C | execucao 1 | Sort  (cost=587.68..588.14 rows=184 width=16) (actual time=0.279..0.286 rows=182 loops=1)
+DEPOIS | consulta C | execucao 1 |   Sort Key: data_entrada_prevista
+DEPOIS | consulta C | execucao 1 |   Sort Method: quicksort  Memory: 30kB
+DEPOIS | consulta C | execucao 1 |   Buffers: shared hit=182 read=3
+DEPOIS | consulta C | execucao 1 |   ->  Bitmap Heap Scan on reserva r  (cost=6.65..580.76 rows=184 width=16) (actual time=0.066..0.259 rows=182 loops=1)
+DEPOIS | consulta C | execucao 1 |         Recheck Cond: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+DEPOIS | consulta C | execucao 1 |         Heap Blocks: exact=182
+DEPOIS | consulta C | execucao 1 |         Buffers: shared hit=182 read=3
+DEPOIS | consulta C | execucao 1 |         ->  Bitmap Index Scan on idx_reserva_status_entrada  (cost=0.00..6.60 rows=184 width=0) (actual time=0.047..0.047 rows=182 loops=1)
+DEPOIS | consulta C | execucao 1 |               Index Cond: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+DEPOIS | consulta C | execucao 1 |               Buffers: shared read=3
+DEPOIS | consulta C | execucao 1 | Planning:
+DEPOIS | consulta C | execucao 1 |   Buffers: shared hit=5
+DEPOIS | consulta C | execucao 1 | Planning Time: 0.080 ms
+DEPOIS | consulta C | execucao 1 | Execution Time: 0.300 ms
+DEPOIS | consulta C | execucao 2 | Sort  (cost=587.68..588.14 rows=184 width=16) (actual time=0.116..0.122 rows=182 loops=1)
+DEPOIS | consulta C | execucao 2 |   Sort Key: data_entrada_prevista
+DEPOIS | consulta C | execucao 2 |   Sort Method: quicksort  Memory: 30kB
+DEPOIS | consulta C | execucao 2 |   Buffers: shared hit=185
+DEPOIS | consulta C | execucao 2 |   ->  Bitmap Heap Scan on reserva r  (cost=6.65..580.76 rows=184 width=16) (actual time=0.024..0.097 rows=182 loops=1)
+DEPOIS | consulta C | execucao 2 |         Recheck Cond: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+DEPOIS | consulta C | execucao 2 |         Heap Blocks: exact=182
+DEPOIS | consulta C | execucao 2 |         Buffers: shared hit=185
+DEPOIS | consulta C | execucao 2 |         ->  Bitmap Index Scan on idx_reserva_status_entrada  (cost=0.00..6.60 rows=184 width=0) (actual time=0.011..0.011 rows=182 loops=1)
+DEPOIS | consulta C | execucao 2 |               Index Cond: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+DEPOIS | consulta C | execucao 2 |               Buffers: shared hit=3
+DEPOIS | consulta C | execucao 2 | Planning Time: 0.044 ms
+DEPOIS | consulta C | execucao 2 | Execution Time: 0.136 ms
+DEPOIS | consulta C | execucao 3 | Sort  (cost=587.68..588.14 rows=184 width=16) (actual time=0.102..0.109 rows=182 loops=1)
+DEPOIS | consulta C | execucao 3 |   Sort Key: data_entrada_prevista
+DEPOIS | consulta C | execucao 3 |   Sort Method: quicksort  Memory: 30kB
+DEPOIS | consulta C | execucao 3 |   Buffers: shared hit=185
+DEPOIS | consulta C | execucao 3 |   ->  Bitmap Heap Scan on reserva r  (cost=6.65..580.76 rows=184 width=16) (actual time=0.020..0.084 rows=182 loops=1)
+DEPOIS | consulta C | execucao 3 |         Recheck Cond: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+DEPOIS | consulta C | execucao 3 |         Heap Blocks: exact=182
+DEPOIS | consulta C | execucao 3 |         Buffers: shared hit=185
+DEPOIS | consulta C | execucao 3 |         ->  Bitmap Index Scan on idx_reserva_status_entrada  (cost=0.00..6.60 rows=184 width=0) (actual time=0.009..0.009 rows=182 loops=1)
+DEPOIS | consulta C | execucao 3 |               Index Cond: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+DEPOIS | consulta C | execucao 3 |               Buffers: shared hit=3
+DEPOIS | consulta C | execucao 3 | Planning Time: 0.037 ms
+DEPOIS | consulta C | execucao 3 | Execution Time: 0.122 ms
+DEPOIS | consulta C | execucao 4 | Sort  (cost=587.68..588.14 rows=184 width=16) (actual time=0.106..0.113 rows=182 loops=1)
+DEPOIS | consulta C | execucao 4 |   Sort Key: data_entrada_prevista
+DEPOIS | consulta C | execucao 4 |   Sort Method: quicksort  Memory: 30kB
+DEPOIS | consulta C | execucao 4 |   Buffers: shared hit=185
+DEPOIS | consulta C | execucao 4 |   ->  Bitmap Heap Scan on reserva r  (cost=6.65..580.76 rows=184 width=16) (actual time=0.020..0.088 rows=182 loops=1)
+DEPOIS | consulta C | execucao 4 |         Recheck Cond: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+DEPOIS | consulta C | execucao 4 |         Heap Blocks: exact=182
+DEPOIS | consulta C | execucao 4 |         Buffers: shared hit=185
+DEPOIS | consulta C | execucao 4 |         ->  Bitmap Index Scan on idx_reserva_status_entrada  (cost=0.00..6.60 rows=184 width=0) (actual time=0.009..0.009 rows=182 loops=1)
+DEPOIS | consulta C | execucao 4 |               Index Cond: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+DEPOIS | consulta C | execucao 4 |               Buffers: shared hit=3
+DEPOIS | consulta C | execucao 4 | Planning Time: 0.039 ms
+DEPOIS | consulta C | execucao 4 | Execution Time: 0.126 ms
+DEPOIS | consulta C | execucao 5 | Sort  (cost=587.68..588.14 rows=184 width=16) (actual time=0.082..0.088 rows=182 loops=1)
+DEPOIS | consulta C | execucao 5 |   Sort Key: data_entrada_prevista
+DEPOIS | consulta C | execucao 5 |   Sort Method: quicksort  Memory: 30kB
+DEPOIS | consulta C | execucao 5 |   Buffers: shared hit=185
+DEPOIS | consulta C | execucao 5 |   ->  Bitmap Heap Scan on reserva r  (cost=6.65..580.76 rows=184 width=16) (actual time=0.015..0.068 rows=182 loops=1)
+DEPOIS | consulta C | execucao 5 |         Recheck Cond: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+DEPOIS | consulta C | execucao 5 |         Heap Blocks: exact=182
+DEPOIS | consulta C | execucao 5 |         Buffers: shared hit=185
+DEPOIS | consulta C | execucao 5 |         ->  Bitmap Index Scan on idx_reserva_status_entrada  (cost=0.00..6.60 rows=184 width=0) (actual time=0.007..0.007 rows=182 loops=1)
+DEPOIS | consulta C | execucao 5 |               Index Cond: (((status_reserva)::text = 'CONFIRMADA'::text) AND (data_entrada_prevista >= CURRENT_DATE) AND (data_entrada_prevista <= (CURRENT_DATE + 7)))
+DEPOIS | consulta C | execucao 5 |               Buffers: shared hit=3
+DEPOIS | consulta C | execucao 5 | Planning Time: 0.029 ms
+DEPOIS | consulta C | execucao 5 | Execution Time: 0.100 ms
+DEPOIS | consulta D | execucao 1 | Bitmap Heap Scan on reserva r  (cost=805.92..1654.06 rows=5 width=12) (actual time=1.726..1.727 rows=0 loops=1)
+DEPOIS | consulta D | execucao 1 |   Recheck Cond: ((id_quarto = 77) AND ((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)))
+DEPOIS | consulta D | execucao 1 |   Filter: (data_saida_prevista > (CURRENT_DATE + 8))
+DEPOIS | consulta D | execucao 1 |   Buffers: shared hit=5 read=58
+DEPOIS | consulta D | execucao 1 |   ->  BitmapAnd  (cost=805.92..805.92 rows=296 width=0) (actual time=1.722..1.723 rows=0 loops=1)
+DEPOIS | consulta D | execucao 1 |         Buffers: shared hit=5 read=58
+DEPOIS | consulta D | execucao 1 |         ->  Bitmap Index Scan on idx_reserva_quarto  (cost=0.00..11.77 rows=997 width=0) (actual time=0.093..0.093 rows=1000 loops=1)
+DEPOIS | consulta D | execucao 1 |               Index Cond: (id_quarto = 77)
+DEPOIS | consulta D | execucao 1 |               Buffers: shared read=3
+DEPOIS | consulta D | execucao 1 |         ->  Bitmap Index Scan on idx_reserva_status_entrada  (cost=0.00..793.90 rows=59300 width=0) (actual time=1.602..1.602 rows=59727 loops=1)
+DEPOIS | consulta D | execucao 1 |               Index Cond: (((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)))
+DEPOIS | consulta D | execucao 1 |               Buffers: shared hit=5 read=55
+DEPOIS | consulta D | execucao 1 | Planning:
+DEPOIS | consulta D | execucao 1 |   Buffers: shared hit=5
+DEPOIS | consulta D | execucao 1 | Planning Time: 0.054 ms
+DEPOIS | consulta D | execucao 1 | Execution Time: 1.734 ms
+DEPOIS | consulta D | execucao 2 | Bitmap Heap Scan on reserva r  (cost=805.92..1654.06 rows=5 width=12) (actual time=1.271..1.272 rows=0 loops=1)
+DEPOIS | consulta D | execucao 2 |   Recheck Cond: ((id_quarto = 77) AND ((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)))
+DEPOIS | consulta D | execucao 2 |   Filter: (data_saida_prevista > (CURRENT_DATE + 8))
+DEPOIS | consulta D | execucao 2 |   Buffers: shared hit=63
+DEPOIS | consulta D | execucao 2 |   ->  BitmapAnd  (cost=805.92..805.92 rows=296 width=0) (actual time=1.268..1.269 rows=0 loops=1)
+DEPOIS | consulta D | execucao 2 |         Buffers: shared hit=63
+DEPOIS | consulta D | execucao 2 |         ->  Bitmap Index Scan on idx_reserva_quarto  (cost=0.00..11.77 rows=997 width=0) (actual time=0.054..0.054 rows=1000 loops=1)
+DEPOIS | consulta D | execucao 2 |               Index Cond: (id_quarto = 77)
+DEPOIS | consulta D | execucao 2 |               Buffers: shared hit=3
+DEPOIS | consulta D | execucao 2 |         ->  Bitmap Index Scan on idx_reserva_status_entrada  (cost=0.00..793.90 rows=59300 width=0) (actual time=1.189..1.189 rows=59727 loops=1)
+DEPOIS | consulta D | execucao 2 |               Index Cond: (((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)))
+DEPOIS | consulta D | execucao 2 |               Buffers: shared hit=60
+DEPOIS | consulta D | execucao 2 | Planning Time: 0.060 ms
+DEPOIS | consulta D | execucao 2 | Execution Time: 1.279 ms
+DEPOIS | consulta D | execucao 3 | Bitmap Heap Scan on reserva r  (cost=805.92..1654.06 rows=5 width=12) (actual time=1.344..1.345 rows=0 loops=1)
+DEPOIS | consulta D | execucao 3 |   Recheck Cond: ((id_quarto = 77) AND ((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)))
+DEPOIS | consulta D | execucao 3 |   Filter: (data_saida_prevista > (CURRENT_DATE + 8))
+DEPOIS | consulta D | execucao 3 |   Buffers: shared hit=63
+DEPOIS | consulta D | execucao 3 |   ->  BitmapAnd  (cost=805.92..805.92 rows=296 width=0) (actual time=1.338..1.338 rows=0 loops=1)
+DEPOIS | consulta D | execucao 3 |         Buffers: shared hit=63
+DEPOIS | consulta D | execucao 3 |         ->  Bitmap Index Scan on idx_reserva_quarto  (cost=0.00..11.77 rows=997 width=0) (actual time=0.052..0.052 rows=1000 loops=1)
+DEPOIS | consulta D | execucao 3 |               Index Cond: (id_quarto = 77)
+DEPOIS | consulta D | execucao 3 |               Buffers: shared hit=3
+DEPOIS | consulta D | execucao 3 |         ->  Bitmap Index Scan on idx_reserva_status_entrada  (cost=0.00..793.90 rows=59300 width=0) (actual time=1.260..1.260 rows=59727 loops=1)
+DEPOIS | consulta D | execucao 3 |               Index Cond: (((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)))
+DEPOIS | consulta D | execucao 3 |               Buffers: shared hit=60
+DEPOIS | consulta D | execucao 3 | Planning Time: 0.038 ms
+DEPOIS | consulta D | execucao 3 | Execution Time: 1.352 ms
+DEPOIS | consulta D | execucao 4 | Bitmap Heap Scan on reserva r  (cost=805.92..1654.06 rows=5 width=12) (actual time=1.351..1.352 rows=0 loops=1)
+DEPOIS | consulta D | execucao 4 |   Recheck Cond: ((id_quarto = 77) AND ((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)))
+DEPOIS | consulta D | execucao 4 |   Filter: (data_saida_prevista > (CURRENT_DATE + 8))
+DEPOIS | consulta D | execucao 4 |   Buffers: shared hit=63
+DEPOIS | consulta D | execucao 4 |   ->  BitmapAnd  (cost=805.92..805.92 rows=296 width=0) (actual time=1.346..1.347 rows=0 loops=1)
+DEPOIS | consulta D | execucao 4 |         Buffers: shared hit=63
+DEPOIS | consulta D | execucao 4 |         ->  Bitmap Index Scan on idx_reserva_quarto  (cost=0.00..11.77 rows=997 width=0) (actual time=0.053..0.053 rows=1000 loops=1)
+DEPOIS | consulta D | execucao 4 |               Index Cond: (id_quarto = 77)
+DEPOIS | consulta D | execucao 4 |               Buffers: shared hit=3
+DEPOIS | consulta D | execucao 4 |         ->  Bitmap Index Scan on idx_reserva_status_entrada  (cost=0.00..793.90 rows=59300 width=0) (actual time=1.268..1.268 rows=59727 loops=1)
+DEPOIS | consulta D | execucao 4 |               Index Cond: (((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)))
+DEPOIS | consulta D | execucao 4 |               Buffers: shared hit=60
+DEPOIS | consulta D | execucao 4 | Planning Time: 0.057 ms
+DEPOIS | consulta D | execucao 4 | Execution Time: 1.359 ms
+DEPOIS | consulta D | execucao 5 | Bitmap Heap Scan on reserva r  (cost=805.92..1654.06 rows=5 width=12) (actual time=1.245..1.246 rows=0 loops=1)
+DEPOIS | consulta D | execucao 5 |   Recheck Cond: ((id_quarto = 77) AND ((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)))
+DEPOIS | consulta D | execucao 5 |   Filter: (data_saida_prevista > (CURRENT_DATE + 8))
+DEPOIS | consulta D | execucao 5 |   Buffers: shared hit=63
+DEPOIS | consulta D | execucao 5 |   ->  BitmapAnd  (cost=805.92..805.92 rows=296 width=0) (actual time=1.242..1.242 rows=0 loops=1)
+DEPOIS | consulta D | execucao 5 |         Buffers: shared hit=63
+DEPOIS | consulta D | execucao 5 |         ->  Bitmap Index Scan on idx_reserva_quarto  (cost=0.00..11.77 rows=997 width=0) (actual time=0.050..0.050 rows=1000 loops=1)
+DEPOIS | consulta D | execucao 5 |               Index Cond: (id_quarto = 77)
+DEPOIS | consulta D | execucao 5 |               Buffers: shared hit=3
+DEPOIS | consulta D | execucao 5 |         ->  Bitmap Index Scan on idx_reserva_status_entrada  (cost=0.00..793.90 rows=59300 width=0) (actual time=1.168..1.168 rows=59727 loops=1)
+DEPOIS | consulta D | execucao 5 |               Index Cond: (((status_reserva)::text = ANY ('{PENDENTE,CONFIRMADA,CHECK-IN}'::text[])) AND (data_entrada_prevista < (CURRENT_DATE + 10)))
+DEPOIS | consulta D | execucao 5 |               Buffers: shared hit=60
+DEPOIS | consulta D | execucao 5 | Planning Time: 0.042 ms
+DEPOIS | consulta D | execucao 5 | Execution Time: 1.252 ms

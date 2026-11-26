@@ -130,7 +130,7 @@ Porta 5432 ocupada? Use `PG_PORT=5433 docker compose up -d --wait`. Mudou um `.s
 
 ### 4.2 O que foi testado
 
-284 testes em pytest + psycopg, rodando contra o banco do compose (cada teste é revertido com ROLLBACK; os de concorrência usam duas conexões reais e apagam o que criaram). Os testes seguem os requisitos de `regras.md`, não o código. O roteiro BDD completo (Given/When/Then) está em [`tests/casos-de-teste/roteiro-ct.md`](tests/casos-de-teste/roteiro-ct.md).
+285 testes em pytest + psycopg, rodando contra o banco do compose (cada teste é revertido com ROLLBACK; os de concorrência usam duas conexões reais e apagam o que criaram). Os testes seguem os requisitos de `regras.md`, não o código. O roteiro BDD completo (Given/When/Then) está em [`tests/casos-de-teste/roteiro-ct.md`](tests/casos-de-teste/roteiro-ct.md).
 
 | Arquivo de teste (`tests/unit/`) | Nº de testes | O que verifica |
 |---|---|---|
@@ -142,8 +142,8 @@ Porta 5432 ocupada? Use `PG_PORT=5433 docker compose up -d --wait`. Mudou um `.s
 | `test_ct_u_concorrencia.py` | 6 | Duas sessões ao mesmo tempo: overbooking (datas iguais e parcialmente sobrepostas), dois cancelamentos e dois check-outs da mesma reserva (a segunda sessão espera e recebe `HOTEL-005` ou `HOTEL-007`), quartos diferentes sem bloqueio e ROLLBACK da primeira sessão |
 | `test_ct_u_consultas.py` | 13 | As 10 consultas com resultado esperado calculado à mão; as técnicas exigidas (JOIN, window, agregação, `NOT EXISTS`) |
 | `test_ct_u_contrato_procedures.py` | 18 | Contrato das procedures e do trigger (códigos de erro estáveis, sem COMMIT) e consistência financeira dos dados de exemplo |
-| `test_ct_u_indices.py` | 3 | Os 3 índices existem e cobrem as colunas previstas |
-| **Total** | **284** | |
+| `test_ct_u_indices.py` | 4 | Os 4 índices existem, cobrem as colunas previstas e toda FK usada em JOIN tem índice |
+| **Total** | **285** | |
 
 Há também `tests/test_procedures.sql` e `tests/test_trigger_sobreposicao.sql`, para rodar no `psql`.
 
@@ -170,13 +170,14 @@ Limitação conhecida: a Q09 considera **todos** os serviços; o planejamento pe
 
 ## 5. Performance
 
-Três índices em [`postgresql/04_indices.sql`](postgresql/04_indices.sql):
+Quatro índices em [`postgresql/04_indices.sql`](postgresql/04_indices.sql):
 
 | Índice | Para quê |
 |---|---|
 | `idx_reserva_hospede` (`Reserva.id_hospede`) | FK usada em JOIN: reservas de um hóspede (Q03, Q08) |
 | `idx_consumo_reserva` (`Consumo_Servico.id_reserva`) | FK da associativa: consumos de uma reserva (Q03, Q07, Q09, check-out) |
 | `idx_reserva_status_entrada` (`Reserva.status_reserva`, `data_entrada_prevista`) | Busca: chegadas por situação e data de entrada (Q02) |
+| `idx_reserva_quarto` (`Reserva.id_quarto`) | FK usada em JOIN e na busca de conflito por quarto do trigger `trg_reserva_sobreposicao` (Q01, Q02, Q04, Q08, Q10) |
 
 **Como medir** (massa de 200 mil reservas em um esquema à parte, `perf_test`, sem tocar no esquema do projeto):
 
@@ -185,9 +186,18 @@ docker compose exec -T postgres psql -U hotel -d hotel -f /dev/stdin < performan
 docker compose exec -T postgres psql -U hotel -d hotel -f /dev/stdin < performance/medir_antes_depois.sql
 ```
 
-O segundo script mede 3 consultas antes e depois dos índices (5 execuções cada, com `EXPLAIN (ANALYZE, BUFFERS)`) e devolve a mediana do tempo e o plano real. A saída vai para [`performance/explain_antes_depois.txt`](performance/explain_antes_depois.txt).
+O segundo script mede 4 consultas antes e depois dos índices (5 execuções cada, com `EXPLAIN (ANALYZE, BUFFERS)`) e devolve a mediana do tempo e o plano real. A saída completa está em [`performance/explain_antes_depois.txt`](performance/explain_antes_depois.txt).
 
-**Resultados medidos:** ainda não registrados neste README. Os tempos e os planos só entram aqui depois de rodar os scripts acima e colar a saída no `explain_antes_depois.txt`; nenhum número é estimado.
+| Consulta | Índice criado | Plano antes | Plano depois | Tempo antes | Tempo depois |
+|---|---|---|---|---|---|
+| A: reservas de um hóspede (JOIN) | `idx_reserva_hospede` | `Parallel Seq Scan` em `reserva` + `Sort` | `Index Scan` + `Sort` pequeno | 9,057 ms | 0,038 ms (238×) |
+| B: consumos de uma reserva (JOIN) | `idx_consumo_reserva` | `Parallel Seq Scan` em `consumo_servico` | `Index Scan` + `Merge Join` | 9,372 ms | 0,016 ms (586×) |
+| C: chegadas dos próximos 7 dias | `idx_reserva_status_entrada` | `Parallel Seq Scan` + `Sort` | `Bitmap Index Scan` + `Sort` | 11,887 ms | 0,126 ms (94×) |
+| D: busca de conflito por quarto | `idx_reserva_quarto` | `Parallel Seq Scan` (100 mil linhas removidas por worker) | `BitmapAnd` de `idx_reserva_quarto` e `idx_reserva_status_entrada` | 10,309 ms | 1,352 ms (7,6×) |
+
+**O que mudou no plano:** nas quatro consultas o PostgreSQL trocou a leitura da tabela inteira (`Seq Scan` sobre 200 mil reservas ou 240 mil consumos) por busca no índice. Na D o ganho é menor porque o plano combina dois índices (`BitmapAnd`), e parte do ganho vem do `idx_reserva_status_entrada`, não só do novo; a medição não separa os dois efeitos.
+
+**Condições da medição (2026-11-26):** PostgreSQL 17.12 em contêiner Docker (`postgres:17`) numa máquina Windows, com 200 mil reservas, 240 mil consumos e 5 mil hóspedes; mediana de 5 execuções por consulta, com cache quente. Os tempos mudam de máquina para máquina; vale refazer a medição antes da entrega.
 
 ---
 
@@ -239,8 +249,8 @@ Só o que de fato aconteceu; cada linha tem registro correspondente na seção 7
 ### Checklist antes da tag v1.0.0
 
 - [ ] `docker compose up -d --wait` sobe do zero, sem erro
-- [ ] `docker compose run --rm testes` verde (284 testes)
-- [ ] `performance/explain_antes_depois.txt` gerado e a tabela da seção 5 preenchida com a saída real
+- [ ] `docker compose run --rm testes` verde (285 testes)
+- [x] `performance/explain_antes_depois.txt` gerado e a tabela da seção 5 preenchida com a saída real (refazer a medição antes da entrega, se o DDL mudar)
 - [ ] Imagem do DER gerada (seção 2) e adicionada ao README
 - [ ] Nenhuma senha real, chave de API ou `.env` no Git (`git log -p`)
 - [ ] Todos os integrantes com commits e capazes de explicar o próprio trecho

@@ -182,7 +182,7 @@ Os testes `tests/unit/test_ct_u_concorrencia.py` usam duas conexões reais: a se
 
 O trigger protege quem faz INSERT direto na tabela: primeiro trava a linha do quarto, depois procura reserva ativa sobreposta, ignorando a própria linha.
 
-Alternativa não adotada: constraint de exclusão com `btree_gist` e `daterange` na RESERVA. É elegante, mas exigiria a extensão e trataria só a sobreposição; o trigger também aplica a regra do status (CANCELADA e NO-SHOW não bloqueiam) e devolve o erro de negócio `HOTEL-005`. Por não existir essa constraint, a RESERVA **não ganha o índice GiST** que ela criaria sozinha, e a FK `reserva.id_quarto` precisa de índice próprio se for usada em JOIN com volume (ver `postgresql/04_indices.sql`).
+Alternativa não adotada: constraint de exclusão com `btree_gist` e `daterange` na RESERVA. É elegante, mas exigiria a extensão e trataria só a sobreposição; o trigger também aplica a regra do status (CANCELADA e NO-SHOW não bloqueiam) e devolve o erro de negócio `HOTEL-005`. Por não existir essa constraint, a RESERVA **não ganha o índice GiST** que ela criaria sozinha, e a FK `reserva.id_quarto` tem índice próprio, `idx_reserva_quarto` (ver `postgresql/04_indices.sql` e a consulta D de `performance/explain_antes_depois.txt`).
 
 ## 10. Armadilhas do PostgreSQL neste domínio
 

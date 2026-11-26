@@ -9,7 +9,7 @@
 \set ON_ERROR_STOP on
 
 -- 1. Criar schema de performance e clonar estrutura (sem dados, SEM índices e SEM FK).
--- ATENÇÃO: LIKE ... INCLUDING ALL copiaria também os índices do schema public (inclusive os 3 índices do projeto,
+-- ATENÇÃO: LIKE ... INCLUDING ALL copiaria também os índices do schema public (inclusive os índices do projeto,
 -- criados pelo 04_indices.sql), e o plano "antes" já usaria índice. Por isso usamos DEFAULTS + CONSTRAINTS (CHECK e NOT NULL)
 -- e criamos só as PKs/UNIQUEs na seção 1b. Efeito colateral conhecido: os DEFAULTs SERIAL continuam apontando para as sequences do
 -- public, então esta carga avança os ids do schema public. Rode a medição por último ou recrie o volume depois (docker compose down -v).
@@ -26,7 +26,7 @@ CREATE TABLE perf_test.Reserva (LIKE public.Reserva INCLUDING DEFAULTS INCLUDING
 CREATE TABLE perf_test.Consumo_Servico (LIKE public.Consumo_Servico INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
 CREATE TABLE perf_test.Cancelamento (LIKE public.Cancelamento INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
 
--- 1b. Só as PKs e UNIQUEs (o schema real também tem). Nenhum dos 3 índices do projeto existe ainda.
+-- 1b. Só as PKs e UNIQUEs (o schema real também tem). Nenhum dos índices do projeto existe ainda.
 ALTER TABLE perf_test.Categoria_Quarto ADD CONSTRAINT pk_categoria_quarto PRIMARY KEY (id_categoria);
 ALTER TABLE perf_test.Hospede          ADD CONSTRAINT pk_hospede          PRIMARY KEY (id_hospede),
                                        ADD CONSTRAINT uk_hospede_cpf      UNIQUE (cpf),
