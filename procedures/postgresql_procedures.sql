@@ -6,9 +6,10 @@
 -- O arquivo é idempotente (CREATE OR REPLACE / DROP TRIGGER IF EXISTS).
 --
 -- Conteúdo:
---   1) cancelar_reserva(...)  procedure  RN-04 (multa por faixa de dias; NO-SHOW)   altera RESERVA e CANCELAMENTO
---   2) fazer_checkout(...)    procedure  RN-05, RN-08, RN-09 (fidelidade, late check-out, pagamento) altera RESERVA e PAGAMENTO
+--   1) cancelar_reserva(...)  procedure  RN-04 (multa por faixa de dias; NO-SHOW; estorno do sinal) altera RESERVA, CANCELAMENTO e PAGAMENTO
+--   2) fazer_checkout(...)    procedure  RN-05, RN-08, RN-09 (fidelidade, late check-out, pagamento) altera RESERVA, QUARTO e PAGAMENTO
 --   3) trg_reserva_sobreposicao  trigger  RN-02 (anti-overbooking, vale para INSERT/UPDATE direto)
+--   4) trg_reserva_validacao     trigger  RN-03 (capacidade), RN-06 (quarto em manutenção), RN-07 (transições de status)
 --
 -- Códigos de erro de negócio (formato do projeto, regras.md seção 6; todos com ERRCODE 'P0001'):
 --   HOTEL-001 parâmetro inválido (nulo, negativo)        HOTEL-007 transição de status inválida
@@ -20,10 +21,13 @@
 --
 -- Limitações do modelo atual (01_ddl.sql), documentadas de propósito:
 --   * O sinal de 30% (RN-10) ainda não é lançado (depende de uma procedure registrar_reserva, fora
---     deste escopo), mas fazer_checkout já desconta do saldo qualquer PAGAMENTO/ESTORNO existente.
---   * QUARTO só tem status_manutencao (booleano): não há status OCUPADO/LIMPEZA. "Liberar o quarto"
---     acontece porque a reserva deixa de ser ativa (CANCELADA, NO-SHOW, CHECK-OUT) e o trigger
---     trg_reserva_sobreposicao só considera PENDENTE, CONFIRMADA e CHECK-IN como ocupando o quarto.
+--     deste escopo), mas cancelar_reserva e fazer_checkout já trabalham com qualquer PAGAMENTO/ESTORNO
+--     existente (estorno do sinal no cancelamento; desconto do saldo no check-out).
+--   * QUARTO tem status_quarto (DISPONIVEL, OCUPADO, LIMPEZA, MANUTENCAO; decisão D-02). Sem a procedure
+--     fazer_checkin (fora deste escopo), nada leva o quarto a OCUPADO: isso é feito por UPDATE direto.
+--     fazer_checkout leva o quarto a LIMPEZA. A disponibilidade para reservar continua dependendo só das
+--     datas: o trigger trg_reserva_sobreposicao considera PENDENTE, CONFIRMADA e CHECK-IN como ocupando
+--     o quarto, e CANCELADA, NO-SHOW e CHECK-OUT como liberando.
 --   * RESERVA não guarda a diária: D = valor_total_bruto / noites (os dados de exemplo seguem isso).
 
 -- ---------------------------------------------------------------------------------------------
@@ -38,8 +42,15 @@
 --       entrada já passou ....... 100% da primeira diária    -> NO-SHOW (hóspede não apareceu)
 --   Primeira diária D = valor_total_bruto / número de noites, arredondada a 2 casas.
 --
--- Altera DUAS tabelas na mesma chamada: RESERVA (status) e CANCELAMENTO (lança a multa; a reserva
--- cancelada deixa de ocupar o quarto para o trigger de sobreposição).
+-- Sinal e estorno (regras.md 4.1, RN-10): sinal pago = PAGAMENTOs - ESTORNOs já lançados da reserva.
+--       estorno      = maior valor entre (sinal pago - multa) e 0  -> lançado em PAGAMENTO (tipo ESTORNO,
+--                      na mesma forma do último PAGAMENTO da reserva; PIX se não houver nenhum)
+--       valor devido = maior valor entre (multa - sinal pago) e 0 -> gravado em CANCELAMENTO.valor_devido
+--                      (a cobrança em si está fora do escopo). Sem sinal pago, não há estorno.
+--
+-- Altera TRÊS tabelas na mesma chamada: RESERVA (status), CANCELAMENTO (multa e valor devido) e
+-- PAGAMENTO (estorno, só quando há algo a devolver). A reserva cancelada deixa de ocupar o quarto
+-- para o trigger de sobreposição.
 --
 -- Concorrência: lê a reserva com FOR UPDATE. Duas sessões cancelando a mesma reserva são
 -- serializadas: a segunda espera, enxerga o status já alterado e recebe HOTEL-007 (nunca gera
@@ -63,6 +74,10 @@ DECLARE
     v_multa  NUMERIC(10,2);
     v_status VARCHAR(20);
     v_faixa  VARCHAR(255);
+    v_pago    NUMERIC(10,2);
+    v_estorno NUMERIC(10,2);
+    v_devido  NUMERIC(10,2);
+    v_forma   VARCHAR(20);
 BEGIN
     IF p_id_reserva IS NULL THEN
         RAISE EXCEPTION 'HOTEL-001: o id da reserva é obrigatório' USING ERRCODE = 'P0001';
@@ -113,9 +128,30 @@ BEGIN
     -- Tabela 1: muda o status da reserva (libera o quarto para novas reservas).
     UPDATE reserva SET status_reserva = v_status WHERE id_reserva = p_id_reserva;
 
-    -- Tabela 2: lança a multa.
-    INSERT INTO cancelamento (id_reserva, taxa_multa_aplicada, motivo_cancelamento)
-    VALUES (p_id_reserva, v_multa, COALESCE(p_motivo, v_faixa));
+    -- Sinal efetivamente em poder do hotel: pagamentos - estornos já lançados.
+    SELECT COALESCE(SUM(CASE tipo WHEN 'PAGAMENTO' THEN valor ELSE -valor END), 0)
+    INTO v_pago
+    FROM pagamento
+    WHERE id_reserva = p_id_reserva;
+
+    v_estorno := GREATEST(v_pago - v_multa, 0);   -- devolve o que sobra do sinal depois da multa
+    v_devido  := GREATEST(v_multa - v_pago, 0);   -- parte da multa que o sinal não cobriu
+
+    -- Tabela 2: lança a multa e o valor devido.
+    INSERT INTO cancelamento (id_reserva, taxa_multa_aplicada, valor_devido, motivo_cancelamento)
+    VALUES (p_id_reserva, v_multa, v_devido, COALESCE(p_motivo, v_faixa));
+
+    -- Tabela 3: devolve o sinal que sobrou (estorno na mesma forma do último pagamento).
+    IF v_estorno > 0 THEN
+        SELECT p.forma INTO v_forma
+        FROM pagamento p
+        WHERE p.id_reserva = p_id_reserva AND p.tipo = 'PAGAMENTO'
+        ORDER BY p.data_hora DESC, p.id_pagamento DESC
+        LIMIT 1;
+
+        INSERT INTO pagamento (id_reserva, tipo, forma, valor)
+        VALUES (p_id_reserva, 'ESTORNO', COALESCE(v_forma, 'PIX'), v_estorno);
+    END IF;
 END;
 $$;
 
@@ -139,9 +175,14 @@ $$;
 --
 --   Valor final = ROUND(valor_total_bruto * (1 - desconto/100) + soma dos consumos + taxa, 2).
 --
--- Altera DUAS tabelas na mesma chamada: RESERVA (status CHECK-OUT, data_checkout_real,
--- percentual_desconto, valor_final_pago recalculado) e PAGAMENTO (lança a quitação). Lê
--- CONSUMO_SERVICO e as estadias do hóspede para recalcular o total.
+--   Ciclo do quarto (D-02): o check-out leva o quarto a LIMPEZA; a volta a DISPONIVEL é um UPDATE da
+--   governança. Quarto em MANUTENCAO não é alterado (manutenção iniciada com o hóspede ainda lá).
+--
+-- Altera TRÊS tabelas na mesma chamada: RESERVA (status CHECK-OUT, data_checkout_real,
+-- percentual_desconto, taxa_checkout e valor_final_pago recalculados), QUARTO (status_quarto =
+-- LIMPEZA) e PAGAMENTO (lança a quitação). Lê CONSUMO_SERVICO e as estadias do hóspede para
+-- recalcular o total. A taxa e o valor final ficam em colunas próprias da reserva, então as
+-- consultas de receita não precisam refazer a conta.
 --
 -- Concorrência: lê a reserva com FOR UPDATE; dois check-outs simultâneos da mesma reserva são
 -- serializados e o segundo recebe HOTEL-007 (nunca grava duas quitações).
@@ -168,7 +209,7 @@ DECLARE
     v_estadias   INTEGER;
     v_desconto   NUMERIC;
     v_consumos   NUMERIC;
-    v_taxa       NUMERIC;
+    v_taxa       NUMERIC(10,2);
     v_final      NUMERIC(10,2);
     v_ja_pago    NUMERIC;
     v_saldo      NUMERIC(10,2);
@@ -187,7 +228,7 @@ BEGIN
     END IF;
 
     -- Trava a linha da reserva: serializa check-outs concorrentes da mesma reserva.
-    SELECT r.id_reserva, r.id_hospede, r.status_reserva, r.data_saida_prevista,
+    SELECT r.id_reserva, r.id_hospede, r.id_quarto, r.status_reserva, r.data_saida_prevista,
            r.data_entrada_prevista, r.data_checkin_real, r.valor_total_bruto
     INTO v_res
     FROM reserva r
@@ -254,15 +295,22 @@ BEGIN
             v_saldo, v_final, v_ja_pago, p_valor_pago USING ERRCODE = 'P0001';
     END IF;
 
-    -- Tabela 1: finaliza a reserva e grava o total recalculado.
+    -- Tabela 1: finaliza a reserva e grava a taxa e o total recalculados (colunas próprias).
     UPDATE reserva
        SET status_reserva      = 'CHECK-OUT',
            data_checkout_real  = v_saida,
            percentual_desconto = v_desconto,
+           taxa_checkout       = v_taxa,
            valor_final_pago    = v_final
      WHERE id_reserva = p_id_reserva;
 
-    -- Tabela 2: lança a quitação do saldo (troco não é lançado). Saldo zerado: nada a lançar.
+    -- Tabela 2: o quarto entra em LIMPEZA (D-02). MANUTENCAO é preservado.
+    UPDATE quarto
+       SET status_quarto = 'LIMPEZA'
+     WHERE id_quarto = v_res.id_quarto
+       AND status_quarto <> 'MANUTENCAO';
+
+    -- Tabela 3: lança a quitação do saldo (troco não é lançado). Saldo zerado: nada a lançar.
     IF v_saldo > 0 THEN
         INSERT INTO pagamento (id_reserva, tipo, forma, valor)
         VALUES (p_id_reserva, 'PAGAMENTO', p_forma_pagamento, v_saldo);
@@ -345,3 +393,81 @@ DROP TRIGGER IF EXISTS trg_reserva_sobreposicao ON reserva;
 CREATE TRIGGER trg_reserva_sobreposicao
 BEFORE INSERT OR UPDATE ON reserva
 FOR EACH ROW EXECUTE FUNCTION fn_reserva_sobreposicao();
+
+
+-- ---------------------------------------------------------------------------------------------
+-- Trigger: trg_reserva_validacao  (função fn_reserva_validacao)
+--
+-- Regras implementadas (vale para INSERT e UPDATE diretos, sem depender de procedure):
+--   RN-03 (HOTEL-003): numero_hospedes de 1 até capacidade_maxima da categoria do quarto.
+--         Confere no INSERT e quando muda o número de hóspedes ou o quarto.
+--   RN-06 (HOTEL-004): reserva ativa (PENDENTE, CONFIRMADA, CHECK-IN) não pode ficar em quarto em
+--         MANUTENCAO. Confere no INSERT, quando a reserva muda de quarto ou quando passa a ficar ativa.
+--         Não confere quando só outras colunas mudam, nem no check-out: o hóspede que já está no
+--         quarto pode sair mesmo que o quarto tenha entrado em manutenção (ver fazer_checkout).
+--   RN-07 (HOTEL-007): o status só muda pela sequência
+--           PENDENTE   -> CONFIRMADA | CANCELADA | NO-SHOW
+--           CONFIRMADA -> CHECK-IN   | CANCELADA | NO-SHOW
+--           CHECK-IN   -> CHECK-OUT
+--         CHECK-OUT, CANCELADA e NO-SHOW são estados finais. Repetir o mesmo status não é transição.
+--
+-- Ordem dos triggers BEFORE (alfabética): trg_reserva_sobreposicao roda antes deste; se as datas
+-- conflitam, o erro é HOTEL-005.
+-- Fora do escopo (regras Extra cortadas): RN-12 (janela do check-in) e a exigência de quarto
+-- DISPONIVEL no check-in, que dependem da procedure fazer_checkin.
+-- ---------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_reserva_validacao() RETURNS TRIGGER AS $$
+DECLARE
+    v_capacidade    INTEGER;
+    v_status_quarto VARCHAR(20);
+BEGIN
+    -- RN-07: transição de status.
+    IF TG_OP = 'UPDATE' AND NEW.status_reserva IS DISTINCT FROM OLD.status_reserva THEN
+        IF (OLD.status_reserva, NEW.status_reserva) NOT IN (
+               ('PENDENTE',   'CONFIRMADA'), ('PENDENTE',   'CANCELADA'), ('PENDENTE',   'NO-SHOW'),
+               ('CONFIRMADA', 'CHECK-IN'),   ('CONFIRMADA', 'CANCELADA'), ('CONFIRMADA', 'NO-SHOW'),
+               ('CHECK-IN',   'CHECK-OUT')) THEN
+            RAISE EXCEPTION 'HOTEL-007: transição de status inválida na reserva %: % -> %',
+                NEW.id_reserva, OLD.status_reserva, NEW.status_reserva USING ERRCODE = 'P0001';
+        END IF;
+    END IF;
+
+    -- RN-03: número de hóspedes x capacidade do quarto.
+    IF TG_OP = 'INSERT'
+       OR NEW.numero_hospedes IS DISTINCT FROM OLD.numero_hospedes
+       OR NEW.id_quarto       IS DISTINCT FROM OLD.id_quarto THEN
+        SELECT c.capacidade_maxima INTO v_capacidade
+        FROM quarto q
+        JOIN categoria_quarto c ON c.id_categoria = q.id_categoria
+        WHERE q.id_quarto = NEW.id_quarto;
+
+        -- Quarto inexistente: a FK fk_reserva_quarto recusa.
+        IF FOUND AND (NEW.numero_hospedes < 1 OR NEW.numero_hospedes > v_capacidade) THEN
+            RAISE EXCEPTION 'HOTEL-003: % hóspede(s) no quarto %: o permitido é de 1 a %',
+                NEW.numero_hospedes, NEW.id_quarto, v_capacidade USING ERRCODE = 'P0001';
+        END IF;
+    END IF;
+
+    -- RN-06: reserva ativa não pode ficar em quarto em manutenção.
+    IF NEW.status_reserva IN ('PENDENTE', 'CONFIRMADA', 'CHECK-IN')
+       AND (TG_OP = 'INSERT'
+            OR NEW.id_quarto IS DISTINCT FROM OLD.id_quarto
+            OR OLD.status_reserva NOT IN ('PENDENTE', 'CONFIRMADA', 'CHECK-IN')) THEN
+        SELECT q.status_quarto INTO v_status_quarto
+        FROM quarto q
+        WHERE q.id_quarto = NEW.id_quarto;
+
+        IF v_status_quarto = 'MANUTENCAO' THEN
+            RAISE EXCEPTION 'HOTEL-004: o quarto % está em manutenção e não pode ser reservado',
+                NEW.id_quarto USING ERRCODE = 'P0001';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_reserva_validacao ON reserva;
+CREATE TRIGGER trg_reserva_validacao
+BEFORE INSERT OR UPDATE ON reserva
+FOR EACH ROW EXECUTE FUNCTION fn_reserva_validacao();
