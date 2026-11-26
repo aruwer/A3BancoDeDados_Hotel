@@ -42,7 +42,7 @@ def caminho_feliz_checkout(conn, valor_pago: Decimal):
     print("\n--- [2] Executando Procedure fazer_checkout no Caminho Feliz (Transação Isolada) ---")
     try:
         with conn.cursor() as cur:
-            # Insere uma reserva própria em CHECK-IN na mesma transação (datas futuras evitam sobreposição)
+            # Insere uma reserva própria em CHECK-IN iniciada há 1 hora, em quarto livre no período
             cur.execute(
                 """
                 INSERT INTO Reserva (
@@ -51,10 +51,21 @@ def caminho_feliz_checkout(conn, valor_pago: Decimal):
                 )
                 VALUES (
                     (SELECT MIN(id_hospede) FROM Hospede),
-                    (SELECT MIN(id_quarto) FROM Quarto WHERE status_manutencao = FALSE),
-                    DATE '2099-01-10',
-                    DATE '2099-01-13',
-                    TIMESTAMP '2099-01-10 14:00:00',
+                    (
+                        SELECT MIN(id_quarto)
+                        FROM Quarto
+                        WHERE status_manutencao = FALSE
+                          AND id_quarto NOT IN (
+                              SELECT id_quarto
+                              FROM Reserva
+                              WHERE status_reserva IN ('PENDENTE', 'CONFIRMADA', 'CHECK-IN')
+                                AND data_saida_prevista > CURRENT_DATE - 1
+                                AND data_entrada_prevista < CURRENT_DATE + 2
+                          )
+                    ),
+                    CURRENT_DATE,
+                    CURRENT_DATE + 1,
+                    CURRENT_TIMESTAMP - INTERVAL '1 hour',
                     'CHECK-IN',
                     %s,
                     0
@@ -126,7 +137,7 @@ def main():
         # 2. Procedure no caminho feliz usando decimal.Decimal e reserva isolada
         caminho_feliz_checkout(
             conn=conn,
-            valor_pago=Decimal("1200.00"),
+            valor_pago=Decimal("200.00"),
         )
 
         # 3. Procedure violando regra de negócio -> captura RaiseException e faz conn.rollback()

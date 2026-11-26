@@ -36,3 +36,14 @@ Registre aqui as interações relevantes, erros reais dos agentes e correções 
 - **Onde a IA mais ajudou:** montar os casos de fronteira dos testes (7, 6, 2, 1 e 0 dias; 12:00:00 e 12:00:01; fidelidade 4, 5, 9 e 10), manter os códigos de erro `HOTEL-00x` consistentes e antecipar o problema da sobrecarga de procedure.
 - **Onde mais errou:** em cumprir o requisito literal da issue (duas tabelas por procedure), porque a 1ª versão do check-out ficou aquém e só foi corrigida na conferência. Também errou ao diagnosticar um arquivo correto como defeituoso e ao escrever um teste que dependia do idioma da mensagem do PostgreSQL. Nenhum desses erros apareceu lendo o código: todos apareceram ao executar.
 - **O que faríamos diferente:** conferir o checklist da issue item a item antes de aceitar a entrega, rodar os testes logo após cada mudança de assinatura ou de DDL, e verificar o conteúdo do arquivo antes de concluir que há erro.
+---
+
+### Correções de Infraestrutura Docker, Normalização LF e Idempotência da Demo Python (Rafaela Acosta)
+- **Contexto:** Ajustes decorrentes do relatório de casos de teste (`P-03`, `P-04`, `P-05`, `P-06` e caminho em `AGENTS.md`) e revisão do PR na branch `fix/correcoes-rafaela`.
+- **O que foi feito com apoio de IA:**
+  - Criação de `.gitattributes` para forçar quebras de linha `LF` em arquivos `.sh`, `.sql` e `.py` (corrigindo o erro `exit code 127` do `postgres-init.sh` em ambientes Windows).
+  - Remoção de BOM (`U+FEFF`) em `python/main.py`, `python/requirements.txt` e `.gitignore`, além do ajuste de referência de `docs/regras.md` para `regras.md` em `AGENTS.md`.
+  - Refatoração do fluxo de caminho feliz em `python/main.py` para operar em transação isolada com `rollback()` e restauração da sequence via `setval`.
+- **Erro identificado e corrigido manualmente/após revisão:**
+  - **Regressão na primeira tentativa de isolamento (`HOTEL-001`):** Na primeira versão do isolamento em `python/main.py`, a reserva de demonstração foi inserida com data fixa em `2099` para evitar sobreposição. Como `fazer_checkout` registra a saída com `CURRENT_TIMESTAMP`, a procedure recusou a operação com `HOTEL-001` (saída anterior ao check-in real).
+  - **Correção aplicada:** Substituição das datas fixas por datas relativas (`CURRENT_DATE`, `CURRENT_DATE + 1` e `CURRENT_TIMESTAMP - INTERVAL '1 hour'`), filtrando dinamicamente um `id_quarto` sem reservas ativas no período para respeitar o trigger de sobreposição e validar o check-out com `Decimal("200.00")`.
