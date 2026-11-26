@@ -4,7 +4,13 @@ Escrito para: o desenvolvedor responsável por cada arquivo (banco, consultas, D
 
 Origem: execução da suíte `tests/unit/` (pytest + psycopg) contra um PostgreSQL 17.12 criado do zero com `01_ddl.sql`, `02_inserts.sql`, `postgresql_procedures.sql` e `04_indices.sql`, na `main` já com as PRs #27, #29 e #30. Os testes seguem os requisitos (`A3_Projeto_BD.html` e `regras.md`), não o código.
 
-**Resultado:** 180 testes, 178 passam e 2 falham de propósito (marcados `xfail(strict=True)` com o id do problema; viram erro assim que o problema for corrigido, para ninguém esquecer de tirar a marca). Além disso há problemas achados fora da suíte, em execução manual (seção 2).
+**Resultado atual (2026-11-25, após os commits `a89d648`, `cfa7a5e`, `dc1ad8f` e `f97e2a7` de João): 180 testes, 180 passam.** Na primeira execução (sobre a `main`) eram 178 passando e 2 falhando de propósito (`xfail(strict=True)`, BUG-01 e BUG-02). João corrigiu os dois; as marcas `xfail` foram removidas e o extrator de consultas de `test_ct_u_consultas.py` foi adaptado ao novo formato do `03_consultas.sql` (blocos `-- @Qnn`). Ficam abertos os problemas achados fora da suíte, em execução manual (seção 2).
+
+| Id | Situação |
+|---|---|
+| P-01 | **Resolvido** (`a89d648`) |
+| P-02 | **Resolvido** (`a89d648`, `cfa7a5e`, `f97e2a7`); sobra detalhe menor, ver nota no item |
+| P-03 a P-08 | Abertos nesta branch (P-03 tem correção parcial na branch do Pedro, ainda não integrada) |
 
 Cada problema tem: onde está, evidência, impacto na nota ou na regra, correção sugerida e CT afetado. A correção é sugestão: quem decide e valida é o grupo (AGENTS.md).
 
@@ -12,7 +18,9 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
 
 ## 1. Problemas que fazem teste falhar
 
-### P-01 · Q08 não executa (SQL inválido) · Gravidade alta
+### P-01 · Q08 não executa (SQL inválido) · Gravidade alta · RESOLVIDO
+
+> **Resolvido em `a89d648` (João).** O `SELECT` externo da Q08 agora usa `t.`. Reteste: CT-U177 passa (sem `xfail`), com as 7 linhas calculadas à mão. O texto abaixo guarda o problema original.
 
 - **Onde:** `postgresql/03_consultas.sql`, consulta Q08 (a mesma falha existe na versão anterior, commit `2ef6357`).
 - **Evidência:** `ERROR: missing FROM-clause entry for table "r"` (SQLSTATE 42P01). O `SELECT` externo lê `r.data_entrada_prevista`, `r.data_saida_prevista`, `r.valor_final_pago`, mas `r` só existe dentro da subconsulta; no nível de fora o alias é `t`.
@@ -21,7 +29,9 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
 - **Verificação feita:** com essa troca a Q08 devolve 7 linhas, idênticas ao valor calculado à mão no teste (Luciana 4 dias, Mariana 7, Ricardo 10, Carlos 12, Ana 18, Fernanda 21, João 56).
 - **CT:** CT-U177 (`test_ct_u177_q08_ultima_estadia_de_cada_hospede`, marcado BUG-01).
 
-### P-02 · `03_consultas.sql` foi substituído por um arquivo gerado e perdeu o conteúdo · Gravidade alta
+### P-02 · `03_consultas.sql` foi substituído por um arquivo gerado e perdeu o conteúdo · Gravidade alta · RESOLVIDO
+
+> **Resolvido em `a89d648`, `cfa7a5e` e `f97e2a7` (João).** `03_consultas.sql` voltou a ter os 10 blocos `-- @Qnn` com objetivo e "Resultado esperado"; a versão para o pgAdmin ficou em `postgresql/03_consultas_todas_pgadmin.sql`; o gerador foi versionado em `python/gerar_consultas_pgadmin.py`. Reteste: CT-U180 e CT-U181 passam (sem `xfail`) e as 10 consultas batem com os valores à mão. **Sobras menores (baixa gravidade):** (a) o cabeçalho do `03_consultas.sql` ainda diz "Q01 a Q05"; (b) a docstring do gerador manda rodar `scripts/gerar_consultas_pgadmin.py`, mas ele está em `python/`; (c) o gerador não foi executado nem comparado com o arquivo gerado por esta verificação. O texto abaixo guarda o problema original.
 
 - **Onde:** `postgresql/03_consultas.sql` (PR #29, commit `4a45258`).
 - **Evidência:** a primeira linha agora diz `GERADO por scripts/gerar_consultas_pgadmin.py a partir de postgresql/03_consultas.sql. NAO EDITE A MAO.`
@@ -133,7 +143,7 @@ Para o desenvolvedor saber o que não precisa mexer:
 - **`cancelar_reserva`** (CT-U50 a CT-U60): fronteiras de 7, 6, 2, 1 e 0 dias e NO-SHOW; arredondamento (33,33 e 16,67); duas tabelas alteradas; não duplica a multa; libera o quarto.
 - **`fazer_checkout`** (CT-U70 a CT-U115): fidelidade (4, 5, 9 e 10 estadias), taxa de late check-out (12:00:00, 12:00:01, 18:00:00, 18:00:01), saída antecipada sem estorno, saída tardia recusada, saldo com pagamentos e estornos anteriores, 1 centavo a menos recusado, formas de pagamento e erros de parâmetro.
 - **Contrato** (CT-U150 a CT-U157): erros `HOTEL-nnn` com SQLSTATE `P0001`, nenhuma rotina faz COMMIT/ROLLBACK, comentários citam a RN, e o dado financeiro de exemplo é consistente (pagamentos menos estornos = valor final nas estadias e = multa nos cancelamentos).
-- **Consultas** Q01 a Q07, Q09 e Q10 e **índices**: valores esperados calculados à mão batem com a saída.
+- **Consultas** Q01 a Q10 (a Q08 desde `a89d648`) e **índices**: valores esperados calculados à mão batem com a saída.
 
 ---
 
@@ -149,7 +159,7 @@ Cinco alterações propositais nas procedures e no trigger, cada uma aplicada ao
 | trigger: `<` para `<=` na entrada (back-to-back) | 2 |
 | pagamento aceita 1 centavo a menos | 1 |
 
-As 5 mutações foram detectadas. Com o código original restaurado, a suíte volta a 178 passando e 2 `xfail`. Isso atende à recomendação do `regras.md` (seção 9) e do enunciado ("rodar um teste de mutação ou ao menos quebrar o SQL de propósito").
+As 5 mutações foram detectadas. Com o código original restaurado, a suíte voltou ao estado anterior à mutação (naquela data, 178 passando e 2 `xfail`; hoje, 180 passando). Isso atende à recomendação do `regras.md` (seção 9) e do enunciado ("rodar um teste de mutação ou ao menos quebrar o SQL de propósito").
 
 ## 6. Como reproduzir
 

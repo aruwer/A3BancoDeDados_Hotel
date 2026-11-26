@@ -20,12 +20,14 @@ A pessoa listada é o **autor do commit que introduziu** o trecho com problema (
 
 | Id | Problema | Origem no histórico | Gravidade | O que fazer |
 |---|---|---|---|---|
-| P-01 | Q08 não executa (`missing FROM-clause entry for table "r"`); o `SELECT` externo usa `r.` em vez de `t.`. A falha derruba o arquivo inteiro | `cfb46e3` "Parte pessoa 2" (a versão anterior de Yuri, `dccfe34`, ainda não tinha o defeito) | Alta | Trocar `r.` por `t.` no `SELECT` externo da Q08 (correção verificada no relatório) |
-| P-02 | `03_consultas.sql` virou saída gerada para pgAdmin: sem comentários `-- @Qnn`, sem "Resultado esperado", e o gerador `scripts/gerar_consultas_pgadmin.py` não está no repositório | `4a45258` "Refactor SQL queries for business analysis Q01-Q10" | Alta | Restaurar a versão com comentários (`git show 2ef6357:postgresql/03_consultas.sql`), manter o formato de pgAdmin em outro caminho e versionar o gerador |
+| P-01 | ~~Q08 não executa~~ **RESOLVIDO** em `a89d648`: o `SELECT` externo usa `t.`. Reteste em 2026-11-25: CT-U177 passa | `cfb46e3` "Parte pessoa 2" | (era Alta) | Nada |
+| P-02 | ~~`03_consultas.sql` virou saída gerada~~ **RESOLVIDO** em `a89d648`, `cfa7a5e` e `f97e2a7`: blocos `-- @Qnn` restaurados, versão pgAdmin em `03_consultas_todas_pgadmin.sql`, gerador em `python/gerar_consultas_pgadmin.py`. Reteste: CT-U180 e CT-U181 passam | `4a45258` | (era Alta) | Sobras menores: trocar "Q01 a Q05" por "Q01 a Q10" no cabeçalho; a docstring do gerador cita `scripts/`, mas ele está em `python/`; rodar o gerador e conferir que reproduz o arquivo versionado |
 | P-08 (Q02, Q06, Q07, Q09) | As consultas passam, mas os dados não cobrem as fronteiras de D+7, de 20% exato, de serviço nunca usado e de "todos menos um" | Consultas em `cfb46e3`; os dados são de Yuri | Baixa | Em conjunto com Yuri: pedir as linhas faltantes para `02_inserts.sql` |
 | Q09 | Considera todos os serviços; o planejamento pede só a categoria "Extras" | `cfb46e3` | Baixa | Depende de Yuri criar `servico.categoria`; depois filtrar a Q09 |
 
-**CTs:** CT-U177 (BUG-01), CT-U181 (BUG-02), CT-U178.
+**CTs:** CT-U177, CT-U181 e CT-U178. Os dois primeiros eram `xfail` (BUG-01 e BUG-02) e agora passam.
+
+**Situação em 2026-11-25:** suíte com 180 passando e nenhuma falha, depois dos 4 commits de João. Em aberto para ele só P-08 (com Yuri), a Q09 e as sobras menores do P-02.
 
 ---
 
@@ -76,5 +78,5 @@ Os testes **não encontraram defeito de comportamento** em `cancelar_reserva`, `
 | Item | Por quê | Quem decide |
 |---|---|---|
 | Decisão de escopo (CT-M13): quais regras "Extra" são implementadas e quais viram corte documentado | Mexe no DDL (Yuri), nas procedures (Pedro) e nas consultas (João) | Grupo |
-| Registro de IA | Cada pessoa tem seu log (`docs/ia-log.md` de Pedro, `docs/Log-IA-Joao`); o `AGENTS.md` pede a consolidação em `docs/ia-log.md` e na seção 7 do README. Os problemas acima (por exemplo P-01, P-02 e P-03) são candidatos a "erro real encontrado e corrigido" na tabela, que exige ao menos 2 | Todos |
+| Registro de IA | Com P-01 e P-02 corrigidos por João, o relatório passa a ter dois erros reais encontrados e corrigidos (a tabela do README exige ao menos 2). Cada pessoa tem seu log (`docs/ia-log.md` de Pedro, `docs/Log-IA-Joao`); o `AGENTS.md` pede a consolidação em `docs/ia-log.md` e na seção 7 do README. Os problemas acima (por exemplo P-01, P-02 e P-03) são candidatos a "erro real encontrado e corrigido" na tabela, que exige ao menos 2 | Todos |
 | Teste de ponta a ponta no Windows | P-03 só aparece em clone limpo no Windows; ninguém testou ainda | Rafaela, com apoio de quem usa Windows |

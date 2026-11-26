@@ -1,8 +1,8 @@
 """CT-U170 a CT-U181 · as 10 consultas de postgresql/03_consultas.sql, conferidas contra valores
 calculados À MÃO a partir de 02_inserts.sql (não copiados da saída do banco).
 
-O arquivo 03_consultas.sql é uma única instrução que devolve (consulta, ordem, linha):
-ordem 0 = 'linhas: N' e as demais = uma linha por resultado, em JSON.
+O arquivo 03_consultas.sql tem um bloco por consulta, marcado por '-- @Qnn' e com o
+'Resultado esperado' em comentário; cada bloco é executado isolado.
 """
 import json
 import re
@@ -18,10 +18,10 @@ ARQUIVO = RAIZ / "postgresql" / "03_consultas.sql"
 
 
 def _blocos_das_consultas():
-    """Texto da consulta de cada Qnn (a parte que devolve 'linhas: N')."""
+    """Texto SQL de cada Qnn: do comentário '-- @Qnn' até a próxima linha '-- -----'."""
     sql = ARQUIVO.read_text(encoding="utf-8")
     return {m.group(1): m.group(2) for m in re.finditer(
-        r"SELECT '(Q\d\d)' AS consulta, 0::bigint AS ordem.*?\n\s*FROM \(\n(.*?)\n\s*\) c\n", sql, re.S)}
+        r"^-- @(Q\d\d)\b.*?\n(.*?)(?=^-- -{10,}|\Z)", sql, re.S | re.M)}
 
 
 @pytest.fixture(scope="module")
@@ -133,8 +133,6 @@ def test_ct_u176_q07_participacao_de_cada_servico(resultados):
     assert abs(sum(Decimal(str(l["percentual"])) for l in q07) - 100) <= Decimal("0.3")
 
 
-@pytest.mark.bug
-@pytest.mark.xfail(strict=True, reason="BUG-01: Q08 referencia r.* fora do escopo (alias da subconsulta é t)")
 def test_ct_u177_q08_ultima_estadia_de_cada_hospede(resultados):
     """Given as estadias CHECK-OUT; Ana e Carlos têm duas (vale a mais recente) e Gabriel não tem nenhuma
     When executo Q08
@@ -158,8 +156,7 @@ def test_ct_u178_q09_hospede_que_usa_todos_aparece(conn):
     """Given um hóspede que consumiu todos os 6 serviços numa reserva
     When executo a divisão relacional de Q09
     Then só ele aparece, e quem usou todos menos um não aparece"""
-    sql = ARQUIVO.read_text(encoding="utf-8")
-    bloco = re.search(r"SELECT 'Q09', row_number\(\) OVER \(\), to_json\(q\)::text\s+FROM \((.*?)\) q\s+UNION ALL", sql, re.S).group(1)
+    bloco = _blocos_das_consultas()["Q09"].rstrip().rstrip(";")
     for sid in range(1, 7):
         conn.execute("INSERT INTO consumo_servico (id_reserva,id_servico,quantidade,valor_total_item) VALUES (4,%s,1,1)", (sid,))
     for sid in range(1, 6):   # hóspede 8 (reserva 10) usou 1 e 3; completa até faltar só o 6
@@ -200,8 +197,6 @@ def test_ct_u180_rubrica_tecnicas_exigidas():
     assert len(join) >= 2 and len(window) >= 2 and len(agregacao) >= 2 and len(anti_join) >= 1
 
 
-@pytest.mark.bug
-@pytest.mark.xfail(strict=True, reason="BUG-02: 03_consultas.sql gerado perdeu os comentários -- @Qnn com o objetivo")
 def test_ct_u181_cada_consulta_tem_objetivo_em_comentario():
     """Given o arquivo 03_consultas.sql
     Then cada consulta Q01 a Q10 tem um comentário '-- @Qnn' com o objetivo (exigência do enunciado)"""
