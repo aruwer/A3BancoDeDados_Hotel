@@ -10,7 +10,11 @@ Origem: execução da suíte `tests/unit/` (pytest + psycopg) contra um PostgreS
 |---|---|
 | P-01 | **Resolvido** (`a89d648`) |
 | P-02 | **Resolvido** (`a89d648`, `cfa7a5e`, `f97e2a7`); sobra detalhe menor, ver nota no item |
-| P-03 a P-08 | Abertos nesta branch (P-03 tem correção parcial na branch do Pedro, ainda não integrada) |
+| P-03 | **Corrigido no PR #31** (`.gitattributes`), ainda não está na `main` |
+| P-04 | **Corrigido pela metade no PR #31**: a demo é repetível, mas o caminho feliz deixou de funcionar (HOTEL-001). Correção pedida na revisão do PR |
+| P-05 | **Corrigido no PR #31** (BOM removido) |
+| P-06 a P-08 | Abertos |
+| Caminho do `AGENTS.md` | **Corrigido no PR #31** |
 
 Cada problema tem: onde está, evidência, impacto na nota ou na regra, correção sugerida e CT afetado. A correção é sugestão: quem decide e valida é o grupo (AGENTS.md).
 
@@ -48,7 +52,9 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
 
 ## 2. Problemas achados na execução manual (ainda sem teste automatizado)
 
-### P-03 · O banco não sobe pelo Docker em checkout no Windows (CRLF) · Gravidade alta
+### P-03 · O banco não sobe pelo Docker em checkout no Windows (CRLF) · Gravidade alta · CORRIGIDO NO PR #31
+
+> **Em correção no PR #31 (`f91fe0c`, Rafaela), verificado em 2026-11-26, antes da 2ª rodada.** `.gitattributes` com `* text=auto` e `eol=lf` para `*.sh`, `*.sql` e `*.py`. Checado num worktree com `core.autocrlf=true`: `docker/postgres-init.sh` ficou com LF e o índice não tem arquivo CRLF. **Não rodei `docker compose up` com a correção**, só conferi o fim de linha. Falta integrar na `main`. O texto abaixo guarda o problema original.
 
 - **Onde:** `docker/postgres-init.sh` (PR #27) e ausência de `.gitattributes`.
 - **Evidência:** com `core.autocrlf=true` (padrão do Git para Windows), o checkout converte o script para CRLF (`git ls-files --eol` mostra `i/lf w/crlf`). O contêiner `postgres:17` então falha:
@@ -63,7 +69,9 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
 - **CT:** CT-R14 e CT-I10 (ainda sem teste automatizado; a verificação exige o Docker real).
 - **Como foi contornado nos testes:** o banco de laboratório foi criado com `docker run postgres:17` e os scripts carregados com `psql` na ordem do `postgres-init.sh`.
 
-### P-04 · A demonstração da aplicação não se repete · Gravidade média
+### P-04 · A demonstração da aplicação não se repete · Gravidade média · CORRIGIDO PELA METADE NO PR #31
+
+> **Em correção no PR #31 (`f91fe0c`, Rafaela), verificado em 2026-11-26, antes da 2ª rodada.** A demo agora cria a própria reserva, reverte e restaura a sequence: rodei `python/main.py` duas vezes e o banco ficou igual (18 reservas, sequence 18), com a suíte em 180 passando. **Mas o passo [2] (caminho feliz) agora termina em `HOTEL-001: a saída (...) é anterior ao check-in real (2099-01-10 14:00:00)`**, porque a reserva da demo tem check-in real em 2099 e o check-out usa a data de hoje. Correção validada por mim numa transação com rollback: entrada hoje, saída amanhã, check-in real uma hora atrás, quarto sem reserva ativa no período e valor pago igual ao bruto (R$ 200,00 deu `CHECK-OUT`). Já pedida na revisão do PR #31. O texto abaixo guarda o problema original.
 
 - **Onde:** `python/main.py` (PR #27), função `caminho_feliz_checkout`.
 - **Evidência:** a primeira execução faz o check-out real da reserva 10 e confirma (`commit`). Na segunda execução:
@@ -75,7 +83,9 @@ Cada problema tem: onde está, evidência, impacto na nota ou na regra, correç�
 - **Correção sugerida:** na demonstração, usar uma reserva criada pela própria aplicação na mesma transação e terminar com `rollback()` (o `regras.md`, seção 11, diz que por padrão a demonstração desfaz tudo e `--efetivar` grava), ou documentar que o volume precisa ser recriado.
 - **CT:** CT-A13.
 
-### P-05 · BOM (U+FEFF) em arquivos novos e no `.gitignore` · Gravidade baixa
+### P-05 · BOM (U+FEFF) em arquivos novos e no `.gitignore` · Gravidade baixa · CORRIGIDO NO PR #31
+
+> **Em correção no PR #31 (`f91fe0c`, Rafaela), verificado em 2026-11-26, antes da 2ª rodada.** BOM removido de `python/main.py`, `python/requirements.txt` e `.gitignore`. O texto abaixo guarda o problema original.
 
 - **Onde:** `python/main.py`, `python/requirements.txt` e `.gitignore` (os três começam com `EF BB BF`).
 - **Evidência e correção de um alerta anterior:** testei os três: o Python executa `main.py` normalmente, o `pip install -r` lê a primeira linha sem erro e `git check-ignore` confirma que `.env` continua ignorado. **O BOM não quebra nada aqui.** Meu alerta anterior de que ele "pode quebrar o `pip install`" estava exagerado.

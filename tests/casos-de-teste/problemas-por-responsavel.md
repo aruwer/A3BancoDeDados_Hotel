@@ -35,13 +35,15 @@ A pessoa listada é o **autor do commit que introduziu** o trecho com problema (
 
 | Id | Problema | Origem no histórico | Gravidade | O que fazer |
 |---|---|---|---|---|
-| P-03 | O banco não sobe pelo Docker em checkout no Windows: o `postgres-init.sh` vira CRLF e o container sai com código 127 (`required file not found`). Não há `.gitattributes` | `d00bae7` "chore(docker): configura inicializacao automatica dos scripts sql e servicos app/testes" (PR #27) | Alta | Criar `.gitattributes` com `*.sh text eol=lf` (e `*.sql`), normalizar o script e testar `docker compose up -d --wait` num clone limpo no Windows |
-| P-04 | A demonstração do app não se repete: a segunda execução cai em HOTEL-007, porque a primeira faz o check-out real da reserva 10. Também deixa o banco incompatível com os testes | `461412d` "feat(app): desenvolve aplicacao python..." (PR #27) | Média | Usar reserva própria na transação e terminar com `rollback()`, ou documentar a recriação do volume |
+| P-03 | **Corrigido no PR #31** (`f91fe0c`): `.gitattributes` com LF para `*.sh`, `*.sql`, `*.py`; conferido com `autocrlf=true`. Falta ir para a `main`. Antes: o banco não sobe pelo Docker em checkout no Windows: o `postgres-init.sh` vira CRLF e o container sai com código 127 (`required file not found`). Não há `.gitattributes` | `d00bae7` "chore(docker): configura inicializacao automatica dos scripts sql e servicos app/testes" (PR #27) | (era Alta) | Testar `docker compose up -d --wait` num clone limpo no Windows depois do merge |
+| P-04 | **Corrigido pela metade no PR #31:** a demo agora é repetível e não suja o banco (verificado em duas execuções), mas o caminho feliz falha com HOTEL-001 (check-in real em 2099). Antes: a demonstração do app não se repete: a segunda execução cai em HOTEL-007, porque a primeira faz o check-out real da reserva 10. Também deixa o banco incompatível com os testes | `461412d` "feat(app): desenvolve aplicacao python..." (PR #27) | Média | **Pendente (2ª rodada):** usar datas relativas a hoje (entrada hoje, saída amanhã, check-in real uma hora atrás), quarto sem reserva ativa no período e `Decimal("200.00")`; rodar `main.py` duas vezes. Detalhes na revisão do PR #31 |
 | P-06 | O serviço `testes` do compose roda `pytest -q tests`, que antes não tinha testes pytest (código 5). Falta confirmar o serviço pelo compose com a suíte nova | `d00bae7` | Média | Rodar `docker compose run --rm testes` do zero e decidir se os dois `.sql` entram na verificação |
-| P-05 | BOM (U+FEFF) em `python/main.py`, `python/requirements.txt` e `.gitignore`. Não quebra nada (verificado) | `461412d` e `5a7acc7` | Baixa | Regravar em UTF-8 sem BOM, sem pressa |
-| Caminho | `AGENTS.md` cita `docs/regras.md`, mas o arquivo está em `regras.md` na raiz | `5a7acc7` (Rafaela criou) e `60b78d2` (Yuri atualizou) | Baixa | Corrigir o caminho, ou mover o arquivo (decidir com Pedro) |
+| P-05 | **Corrigido no PR #31.** Antes: BOM (U+FEFF) em `python/main.py`, `python/requirements.txt` e `.gitignore`. Não quebra nada (verificado) | `461412d` e `5a7acc7` | (era Baixa) | Nada |
+| Caminho | **Corrigido no PR #31** (`AGENTS.md` agora cita `regras.md`). Antes: `AGENTS.md` cita `docs/regras.md`, mas o arquivo está em `regras.md` na raiz | `5a7acc7` (Rafaela criou) e `60b78d2` (Yuri atualizou) | (era Baixa) | Sobra o `regras.md` citar `docs/perguntas_de_negocio.md` (item de Pedro) |
 
 **CTs:** CT-A13, CT-A15, CT-I10, CT-I16, CT-R13, CT-R14.
+
+**Situação em 2026-11-26 (antes da 2ª rodada):** P-03, P-05 e o caminho do `AGENTS.md` estão corrigidos no PR #31. Falta o P-04 (caminho feliz) e, depois do merge, validar o P-06 (serviço `testes`, que a Amanda valida depois das correções). Falta também a Rafaela registrar o trabalho no `docs/ia-log.md`.
 
 ---
 
