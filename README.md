@@ -49,7 +49,9 @@ Detalhes, fronteiras e códigos de erro em [`regras.md`](regras.md). Prioridade:
 
 ## 2. DER
 
-Fonte versionada: [`der/hotel.puml`](der/hotel.puml) (PlantUML, notação Crow's Foot). Para gerar a imagem sem instalar nada além do Docker:
+![DER do Hotel Host](der/hotel.png)
+
+Fonte versionada: [`der/hotel.puml`](der/hotel.puml) (PlantUML, notação Crow's Foot). Para gerar a imagem de novo, sem instalar nada além do Docker:
 
 ```bash
 docker run --rm -v "$PWD/der:/data" plantuml/plantuml -tpng /data/hotel.puml
@@ -118,7 +120,7 @@ Porta 5432 ocupada? Use `PG_PORT=5433 docker compose up -d --wait`. Mudou um `.s
 .
 ├── README.md · AGENTS.md · opencode.json · docker-compose.yml · pytest.ini
 ├── regras.md · perguntas_de_negocio.md
-├── der/                 # hotel.puml
+├── der/                 # hotel.puml · hotel.png
 ├── postgresql/          # 01_ddl · 02_inserts · 03_consultas · 03_consultas_todas_pgadmin · 04_indices
 ├── procedures/          # postgresql_procedures.sql (2 procedures e 2 triggers)
 ├── performance/         # carga_massa.sql · medir_antes_depois.sql
@@ -251,6 +253,6 @@ Só o que de fato aconteceu; cada linha tem registro correspondente na seção 7
 - [ ] `docker compose up -d --wait` sobe do zero, sem erro
 - [ ] `docker compose run --rm testes` verde (285 testes)
 - [x] `performance/explain_antes_depois.txt` gerado e a tabela da seção 5 preenchida com a saída real (refazer a medição antes da entrega, se o DDL mudar)
-- [ ] Imagem do DER gerada (seção 2) e adicionada ao README
+- [x] Imagem do DER gerada (seção 2) e adicionada ao README (gerar de novo se o `.puml` mudar)
 - [ ] Nenhuma senha real, chave de API ou `.env` no Git (`git log -p`)
 - [ ] Todos os integrantes com commits e capazes de explicar o próprio trecho
