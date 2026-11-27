@@ -209,4 +209,4 @@ Incompatibilidades que apareceram ao juntar tudo, e como cada uma foi resolvida:
 | Sem cobertura das regras novas do Yuri | | testes novos: desconto fora de 0/5/10 (CT-U05), 30 e 31 noites (CT-U03) e RESTRICT em `cancelamento` e `consumo_servico` (CT-U24) |
 | Sobras de João | cabeçalho "Q01 a Q05" e caminho `scripts/` no gerador | corrigidos para "Q01 a Q10" e `python/` |
 
-Ainda em aberto: Q09 sem a categoria "Extras"; o README cita Oracle, Java e serviços que não existem no compose.
+Ainda em aberto: Q09 sem a categoria "Extras" (README reescrito e `testes/conftest.py` removido nesta etapa).
