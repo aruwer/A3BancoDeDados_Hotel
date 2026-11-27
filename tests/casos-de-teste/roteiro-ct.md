@@ -1600,4 +1600,4 @@ Os CT-U com status IMPL e PARCIAL (parte implementada) estão codificados em `te
 | `test_ct_u_consultas.py` | CT-U170 a U179, U180, U181 |
 | `test_ct_u_indices.py` | CT-U190, U192 |
 
-Resultado atual: 278 passam, sem `xfail`, na integração dos PRs #32 (Pedro) e #33 (Yuri) com a branch de testes (ver `relatorio-problemas.md`, seção 7). Os CT-U03, CT-U05, CT-U24, CT-U40 a CT-U43, CT-U61, CT-U62, CT-U80 a CT-U82 e CT-U94 a CT-U96, antes LACUNA ou PARCIAL, agora têm teste. Fora desta etapa ficam: o CT-U29 (manual), o CT-U151 e o CT-U191/U193/U194 (dependem de decisão ou de massa de dados) e os grupos CT-I, CT-A, CT-R e CT-M.
+Resultado atual: 285 passam, sem `xfail`, na integração dos PRs #32 (Pedro) e #33 (Yuri) com a branch de testes (ver `relatorio-problemas.md`, seção 7). Os CT-U03, CT-U05, CT-U24, CT-U40 a CT-U43, CT-U61, CT-U62, CT-U80 a CT-U82 e CT-U94 a CT-U96, antes LACUNA ou PARCIAL, agora têm teste. Fora desta etapa ficam: o CT-U29 (manual), o CT-U151 e o CT-U191/U193/U194 (dependem de decisão ou de massa de dados) e os grupos CT-I, CT-A, CT-R e CT-M.

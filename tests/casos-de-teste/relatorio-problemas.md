@@ -4,7 +4,7 @@ Escrito para: o desenvolvedor responsável por cada arquivo (banco, consultas, D
 
 Origem: execução da suíte `tests/unit/` (pytest + psycopg) contra um PostgreSQL 17.12 criado do zero com `01_ddl.sql`, `02_inserts.sql`, `postgresql_procedures.sql` e `04_indices.sql`, na `main` já com as PRs #27, #29 e #30. Os testes seguem os requisitos (`A3_Projeto_BD.html` e `regras.md`), não o código.
 
-**Atualização (2026-11-26): 278 testes, 278 passam, na integração dos PRs #32 e #33 (seção 7).**
+**Atualização (2026-11-26): 285 testes, 285 passam, na integração dos PRs #32 e #33 (seção 7).**
 
 **Resultado em 2026-11-25 ( após os commits `a89d648`, `cfa7a5e`, `dc1ad8f` e `f97e2a7` de João): 180 testes, 180 passam.** Na primeira execução (sobre a `main`) eram 178 passando e 2 falhando de propósito (`xfail(strict=True)`, BUG-01 e BUG-02). João corrigiu os dois; as marcas `xfail` foram removidas e o extrator de consultas de `test_ct_u_consultas.py` foi adaptado ao novo formato do `03_consultas.sql` (blocos `-- @Qnn`). Ficam abertos os problemas achados fora da suíte, em execução manual (seção 2).
 
@@ -209,4 +209,4 @@ Incompatibilidades que apareceram ao juntar tudo, e como cada uma foi resolvida:
 | Sem cobertura das regras novas do Yuri | | testes novos: desconto fora de 0/5/10 (CT-U05), 30 e 31 noites (CT-U03) e RESTRICT em `cancelamento` e `consumo_servico` (CT-U24) |
 | Sobras de João | cabeçalho "Q01 a Q05" e caminho `scripts/` no gerador | corrigidos para "Q01 a Q10" e `python/` |
 
-Ainda em aberto: Q09 sem a categoria "Extras"; `testes/conftest.py` (pasta do Yuri) não é usado pelo compose, que roda `tests`; o README cita Oracle, Java e serviços que não existem no compose.
+Ainda em aberto: Q09 sem a categoria "Extras"; o README cita Oracle, Java e serviços que não existem no compose.
