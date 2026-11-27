@@ -20,12 +20,14 @@ A pessoa listada é o **autor do commit que introduziu** o trecho com problema (
 
 | Id | Problema | Origem no histórico | Gravidade | O que fazer |
 |---|---|---|---|---|
-| ~~P-01~~ **Corrigido** | Q08 não executa (`missing FROM-clause entry for table "r"`); o `SELECT` externo usa `r.` em vez de `t.`. A falha derruba o arquivo inteiro | `cfb46e3` "Parte pessoa 2" (a versão anterior de Yuri, `dccfe34`, ainda não tinha o defeito) | Alta | Feito: `r.` trocado por `t.` no `SELECT` externo da Q08 (CT-U177 passa) |
-| ~~P-02~~ **Corrigido (parcial)** | `03_consultas.sql` virou saída gerada para pgAdmin: sem comentários `-- @Qnn`, sem "Resultado esperado", e o gerador `scripts/gerar_consultas_pgadmin.py` não está no repositório | `4a45258` "Refactor SQL queries for business analysis Q01-Q10" | Alta | Restaurar a versão com comentários (`git show 2ef6357:postgresql/03_consultas.sql`), manter o formato de pgAdmin em outro caminho e versionar o gerador |
+| P-01 | ~~Q08 não executa~~ **RESOLVIDO** em `a89d648`: o `SELECT` externo usa `t.`. Reteste em 2026-11-25: CT-U177 passa | `cfb46e3` "Parte pessoa 2" | (era Alta) | Nada |
+| P-02 | ~~`03_consultas.sql` virou saída gerada~~ **RESOLVIDO** em `a89d648`, `cfa7a5e` e `f97e2a7`: blocos `-- @Qnn` restaurados, versão pgAdmin em `03_consultas_todas_pgadmin.sql`, gerador em `python/gerar_consultas_pgadmin.py`. Reteste: CT-U180 e CT-U181 passam | `4a45258` | (era Alta) | Sobras menores: trocar "Q01 a Q05" por "Q01 a Q10" no cabeçalho; a docstring do gerador cita `scripts/`, mas ele está em `python/`; rodar o gerador e conferir que reproduz o arquivo versionado |
 | P-08 (Q02, Q06, Q07, Q09) | As consultas passam, mas os dados não cobrem as fronteiras de D+7, de 20% exato, de serviço nunca usado e de "todos menos um" | Consultas em `cfb46e3`; os dados são de Yuri | Baixa | Em conjunto com Yuri: pedir as linhas faltantes para `02_inserts.sql` |
 | Q09 | Considera todos os serviços; o planejamento pede só a categoria "Extras" | `cfb46e3` | Baixa | Depende de Yuri criar `servico.categoria`; depois filtrar a Q09 |
 
-**CTs:** CT-U177 (BUG-01, corrigido), CT-U181 (BUG-02, corrigido: objetivos `-- @Qnn` e cabeçalho; falta restaurar os "Resultado esperado" de `2ef6357`), CT-U178.
+**CTs:** CT-U177, CT-U181 e CT-U178. Os dois primeiros eram `xfail` (BUG-01 e BUG-02) e agora passam.
+
+**Situação em 2026-11-25:** suíte com 180 passando e nenhuma falha, depois dos 4 commits de João. Em aberto para ele só P-08 (com Yuri), a Q09 e as sobras menores do P-02.
 
 ---
 
@@ -33,41 +35,48 @@ A pessoa listada é o **autor do commit que introduziu** o trecho com problema (
 
 | Id | Problema | Origem no histórico | Gravidade | O que fazer |
 |---|---|---|---|---|
-| P-03 | O banco não sobe pelo Docker em checkout no Windows: o `postgres-init.sh` vira CRLF e o container sai com código 127 (`required file not found`). Não há `.gitattributes` | `d00bae7` "chore(docker): configura inicializacao automatica dos scripts sql e servicos app/testes" (PR #27) | Alta | Criar `.gitattributes` com `*.sh text eol=lf` (e `*.sql`), normalizar o script e testar `docker compose up -d --wait` num clone limpo no Windows |
-| P-04 | A demonstração do app não se repete: a segunda execução cai em HOTEL-007, porque a primeira faz o check-out real da reserva 10. Também deixa o banco incompatível com os testes | `461412d` "feat(app): desenvolve aplicacao python..." (PR #27) | Média | Usar reserva própria na transação e terminar com `rollback()`, ou documentar a recriação do volume |
-| P-06 | O serviço `testes` do compose roda `pytest -q tests`, que antes não tinha testes pytest (código 5). Falta confirmar o serviço pelo compose com a suíte nova | `d00bae7` | Média | Rodar `docker compose run --rm testes` do zero e decidir se os dois `.sql` entram na verificação |
-| P-05 | BOM (U+FEFF) em `python/main.py`, `python/requirements.txt` e `.gitignore`. Não quebra nada (verificado) | `461412d` e `5a7acc7` | Baixa | Regravar em UTF-8 sem BOM, sem pressa |
-| Caminho | `AGENTS.md` cita `docs/regras.md`, mas o arquivo está em `regras.md` na raiz | `5a7acc7` (Rafaela criou) e `60b78d2` (Yuri atualizou) | Baixa | Corrigir o caminho, ou mover o arquivo (decidir com Pedro) |
+| P-03 | **Resolvido** (PR #31, `f91fe0c`, mergeado na branch de testes): `.gitattributes` com LF para `*.sh`, `*.sql`, `*.py`; conferido com `autocrlf=true`. Falta ir para a `main`. Antes: o banco não sobe pelo Docker em checkout no Windows: o `postgres-init.sh` vira CRLF e o container sai com código 127 (`required file not found`). Não há `.gitattributes` | `d00bae7` "chore(docker): configura inicializacao automatica dos scripts sql e servicos app/testes" (PR #27) | (era Alta) | Testar `docker compose up -d --wait` num clone limpo no Windows depois do merge |
+| P-04 | **Resolvido** (PR #31, `ab8a272`): demo repetível, não suja o banco e o caminho feliz dá CHECK-OUT (verificado em duas execuções em 2026-11-26). Antes: a demonstração do app não se repete: a segunda execução cai em HOTEL-007, porque a primeira faz o check-out real da reserva 10. Também deixa o banco incompatível com os testes | `461412d` "feat(app): desenvolve aplicacao python..." (PR #27) | (era Média) | Nada |
+| P-06 | **Resolvido** (verificado em 2026-11-26): `docker compose up -d --wait` e `docker compose run --rm testes` do zero deram 180 passando; sem alteração no serviço. Quem clonou antes do `.gitattributes` precisa regravar os arquivos (CRLF no disco). Antes: o serviço `testes` do compose roda `pytest -q tests`, que antes não tinha testes pytest (código 5). Falta confirmar o serviço pelo compose com a suíte nova | `d00bae7` | Média | (era Média) | Só decidir se os dois `.sql` de `tests/` entram na verificação (CT-I17) |
+| P-05 | **Resolvido** (PR #31). Antes: BOM (U+FEFF) em `python/main.py`, `python/requirements.txt` e `.gitignore`. Não quebra nada (verificado) | `461412d` e `5a7acc7` | (era Baixa) | Nada |
+| Caminho | **Resolvido** (PR #31; `AGENTS.md` agora cita `regras.md`). Antes: `AGENTS.md` cita `docs/regras.md`, mas o arquivo está em `regras.md` na raiz | `5a7acc7` (Rafaela criou) e `60b78d2` (Yuri atualizou) | (era Baixa) | Sobra o `regras.md` citar `docs/perguntas_de_negocio.md` (item de Pedro) |
 
 **CTs:** CT-A13, CT-A15, CT-I10, CT-I16, CT-R13, CT-R14.
+
+**Situação em 2026-11-26 (depois da 2ª rodada, PR #31 mergeado na branch de testes):** P-03, P-04, P-05 e o caminho do `AGENTS.md` estão resolvidos, e ela registrou o trabalho no `docs/ia-log.md` (a assinatura do log diz "Rafaela Acosta", o autor dos commits é Rafaela Costa). O P-06 (serviço `testes` do compose) também está resolvido: verificado pelo compose, 180 passando. Fica a divergência do README (cita Oracle, Java e serviços `app-python`/`app-java` que não existem no compose), que contradiz o `AGENTS.md`.
 
 ---
 
 ## Yuri Soares Dutra
 
-| Id | Problema | Origem no histórico | Gravidade | O que fazer |
-|---|---|---|---|---|
-| P-07 | Cabeçalho do `02_inserts.sql` cita hóspedes que não existem (Diego, Bruno, Elisa, Fábio, Gabriela); os valores batem, os nomes não | `1406885` "feat(sql): adiciona 02_inserts.sql..." (os nomes dos hóspedes mudaram depois, em `bb9c5e8`, e o comentário não acompanhou) | Baixa | Trocar pelos nomes reais (João 2420, Carlos 2250, Ana 1550, Fernanda 1200, Mariana = Ricardo = 800, Luciana 400) |
-| P-08 | Faltam dados de fronteira: Q02 em D+7 CONFIRMADA e D+8, taxa de 20% exata (Q06), serviço nunca consumido e empate (Q07), hóspede que usou todos menos um (Q09), mês sem receita | `02_inserts.sql` (vários commits) | Baixa | Acrescentar as linhas, mantendo datas relativas e as somas financeiras que o CT-U156 confere |
-| DDL | `ck_reserva_desconto` aceita 0 a 100 (o `regras.md` diz 0, 5 ou 10); `ON DELETE CASCADE` em `cancelamento` e `consumo_servico` (o `regras.md` diz que todas as FKs bloqueiam); sem máximo de 30 noites (RN-01); `quarto` só tem `status_manutencao` booleano; `reserva` sem número de hóspedes (RN-03); `servico` sem `categoria` (Q09) | `fe72e9e` "Atualização sql" e anteriores (`b9a9e89`, `c68b2b5`) | Média | Decidir com Pedro: ou muda o DDL, ou o `regras.md` e o README registram a decisão (CT-M13) |
+| Id | Problema | Situação |
+|---|---|---|
+| P-07 | Cabeçalho do `02_inserts.sql` com nomes que não existem | **Resolvido** (PR #33) |
+| P-08 | Faltam dados de fronteira (Q02, Q06, Q07, Q09, mês sem receita) | **Resolvido** (PR #33): F1 a F8; testes recalculados |
+| DDL | `ck_reserva_desconto` 0 a 100; `CASCADE`; sem máximo de 30 noites | **Resolvido** (PR #33): desconto 0/5/10, RESTRICT e `ck_reserva_max_noites` |
+| DDL | `quarto` só com booleano; `reserva` sem número de hóspedes; `servico` sem `categoria` | `status_quarto` e `numero_hospedes` resolvidos pelo PR #32 (Pedro); `servico.categoria` segue sem existir (Q09 considera todos os serviços) |
 
-**CTs:** CT-U03, CT-U05, CT-U24, CT-U40 a CT-U43, CT-U80 a CT-U84, CT-U178.
+**CTs:** CT-U03, CT-U05, CT-U24, CT-U40 a CT-U43, CT-U80 a CT-U84, CT-U178: todos passam.
+
+**Situação em 2026-11-26:** a integração com o PR #32 teve conflito só em duas linhas do `01_ddl.sql`, resolvido mantendo as constraints dos dois. Falta decidir se `testes/conftest.py` fica (o compose roda `tests`).
 
 ---
 
 ## Pedro da Silva Kolling
 
-Os testes **não encontraram defeito de comportamento** em `cancelar_reserva`, `fazer_checkout` e no trigger: os 5 testes de mutação foram detectados e as fronteiras do `regras.md` batem. O que sobra são lacunas de escopo entre o `regras.md` e o que foi implementado, já documentadas por ele no cabeçalho de `procedures/postgresql_procedures.sql`.
+Os testes não encontraram defeito de comportamento nas procedures; o que havia eram lacunas de escopo, e o PR #32 as resolveu.
 
-| Id | Problema | Origem no histórico | Gravidade | O que fazer |
-|---|---|---|---|---|
-| Lacuna | `cancelar_reserva` grava só a multa; o estorno do sinal (tabela 4.1) e o "valor devido" não são lançados. O estorno do `02_inserts.sql` foi inserido à mão | `2399f59` / `5df922f` | Média | Lançar o ESTORNO em `pagamento` na procedure, ou registrar o corte da regra |
-| ~~Lacuna~~ **Corrigida** | `fazer_checkout` não atualizava o quarto (LIMPEZA, decisão D-02) nem guardava a taxa em coluna própria (seção 13.2) | `2399f59` | Baixa | Feito: `QUARTO.status_quarto` (`ck_quarto_status`) no lugar de `status_manutencao`, `RESERVA.taxa_checkout`, `fazer_checkout` atualiza as três tabelas. Testes CT-U107, CT-U108, CT-U38, CT-U39, CT-U158 e CT-U159. **Confirmar com Yuri** a troca do booleano pelo `status_quarto` |
-| ~~Lacuna~~ **Corrigida (núcleo) / cortada (Extra)** | Regras sem código: RN-03, RN-06, RN-07 (qualquer `UPDATE` de status passa), RN-10, RN-11, RN-12, auditoria, `registrar_reserva` e `fazer_checkin` | `regras.md` (`af3762c`, `45e87cd`, `b0ef3b0`) | Média | Feito: RN-03, RN-06 e RN-07 implementadas no trigger `trg_reserva_validacao` (CT-U40 a CT-U43, CT-U80 a CT-U82, CT-U90 a CT-U96); RN-10, RN-11, RN-12, auditoria, `registrar_reserva` e `fazer_checkin` **cortadas**, registro no README. Pendente: a RN-06 de check-in só em DISPONIVEL depende da `fazer_checkin` cortada |
-| ~~Nomes~~ **Corrigido** | `regras.md` e `perguntas_de_negocio.md` usavam `EM_ANDAMENTO`/`FINALIZADA`/`NO_SHOW`; o banco usa `CHECK-IN`/`CHECK-OUT`/`NO-SHOW` | `af3762c` e `44cd078` | Baixa | Feito: documentos alinhados ao DDL em um só commit (`regras.md`, `README.md`, `perguntas_de_negocio.md`). O `PENDENTE`, que só existia no banco, entrou no `regras.md` (status, RN-02, RN-04, máquina de estados). Teste CT-R12 |
-| ~~Caminho~~ **Corrigido** | `regras.md` citava `docs/perguntas_de_negocio.md`, que está na raiz (o mesmo erro estava em `docs/regras.md` no `AGENTS.md`, `README.md` e `perguntas_de_negocio.md`) | `af3762c` | Baixa | Feito: todos os caminhos apontam para a raiz. Teste CT-M25 |
+| Id | Problema | Situação |
+|---|---|---|
+| Lacuna | Estorno do sinal e valor devido não lançados | **Resolvido** (PR #32): CT-U61 e CT-U62 |
+| Lacuna | `fazer_checkout` sem LIMPEZA e sem colunas de taxa e valor final | **Resolvido** (PR #32) |
+| Lacuna | RN-03, RN-06, RN-07 sem código; RN-10, RN-11, RN-12 e auditoria | RN-03, RN-06 e RN-07 **resolvidas** (trigger `trg_reserva_validacao`); as Extra foram **cortadas e documentadas** |
+| Nomes | Status `EM_ANDAMENTO`/`FINALIZADA`/`NO_SHOW` nos documentos | **Resolvido** (PR #32) |
+| Caminho | `docs/perguntas_de_negocio.md` | **Resolvido** (PR #32) |
+| Integração | O PR #32 trocou `status_manutencao` por `status_quarto` e quebrava `main.py`, a Q04 e o arquivo do pgAdmin; conflito em `03_consultas.sql` | **Resolvido** na integração (ver relatório, seção 7) |
+| Registro | Falta no `docs/ia-log.md` a decisão de trocar o booleano por `status_quarto` | Aberto |
 
-**CTs:** CT-U61, CT-U62, CT-U90 a CT-U96, CT-U107, CT-U108, CT-U120 a CT-U143, CT-U160, CT-U161, CT-R12, CT-M25.
+**CTs:** CT-U61, CT-U62, CT-U90 a CT-U96, CT-U107, CT-U108, CT-U120 a CT-U143, CT-U160, CT-U161, CT-R12, CT-M25: todos passam.
 
 ---
 
@@ -76,5 +85,5 @@ Os testes **não encontraram defeito de comportamento** em `cancelar_reserva`, `
 | Item | Por quê | Quem decide |
 |---|---|---|
 | Decisão de escopo (CT-M13): quais regras "Extra" são implementadas e quais viram corte documentado | Mexe no DDL (Yuri), nas procedures (Pedro) e nas consultas (João) | Grupo |
-| Registro de IA | Cada pessoa tem seu log (`docs/ia-log.md` de Pedro, `docs/Log-IA-Joao`); o `AGENTS.md` pede a consolidação em `docs/ia-log.md` e na seção 7 do README. Os problemas acima (por exemplo P-01, P-02 e P-03) são candidatos a "erro real encontrado e corrigido" na tabela, que exige ao menos 2 | Todos |
+| Registro de IA | Com P-01 e P-02 corrigidos por João, o relatório passa a ter dois erros reais encontrados e corrigidos (a tabela do README exige ao menos 2). Cada pessoa tem seu log (`docs/ia-log.md` de Pedro, `docs/Log-IA-Joao`); o `AGENTS.md` pede a consolidação em `docs/ia-log.md` e na seção 7 do README. Os problemas acima (por exemplo P-01, P-02 e P-03) são candidatos a "erro real encontrado e corrigido" na tabela, que exige ao menos 2 | Todos |
 | Teste de ponta a ponta no Windows | P-03 só aparece em clone limpo no Windows; ninguém testou ainda | Rafaela, com apoio de quem usa Windows |

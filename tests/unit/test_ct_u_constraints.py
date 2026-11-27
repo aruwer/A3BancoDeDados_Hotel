@@ -95,6 +95,47 @@ def test_ct_u05_desconto_fora_de_0_a_100_e_recusado(conn, pct):
     assert (estado, constraint) == (CHECK, "ck_reserva_desconto")
 
 
+@pytest.mark.parametrize("pct", [1, 7, 50, 100])
+def test_ct_u05_desconto_fora_de_0_5_10_e_recusado(conn, pct):
+    """When o percentual de desconto está entre 0 e 100, mas não é 0, 5 ou 10 (regras.md)
+    Then o banco recusa com ck_reserva_desconto"""
+    h = hoje(conn)
+    estado, constraint = erro_banco(
+        conn,
+        "INSERT INTO reserva (id_hospede,id_quarto,data_entrada_prevista,data_saida_prevista,"
+        "valor_total_bruto,percentual_desconto) VALUES (1,7,%s,%s,100,%s)",
+        (h + timedelta(days=60), h + timedelta(days=62), pct))
+    assert (estado, constraint) == (CHECK, "ck_reserva_desconto")
+
+
+def test_ct_u03_30_noites_e_aceito_e_31_e_recusado(conn):
+    """Given o máximo de 30 noites por reserva (RN-01)
+    When uma reserva de 30 noites e outra de 31 noites são inseridas
+    Then a de 30 é aceita e a de 31 é recusada com ck_reserva_max_noites"""
+    assert _inserir_reserva(conn, 60, 90) > 0
+    h = hoje(conn)
+    estado, constraint = erro_banco(
+        conn,
+        "INSERT INTO reserva (id_hospede,id_quarto,data_entrada_prevista,data_saida_prevista,"
+        "valor_total_bruto) VALUES (1,8,%s,%s,100)",
+        (h + timedelta(days=60), h + timedelta(days=91)))
+    assert (estado, constraint) == (CHECK, "ck_reserva_max_noites")
+
+
+@pytest.mark.parametrize("filho,colunas,valores,constraint", [
+    ("cancelamento", "(id_reserva,taxa_multa_aplicada)", "(%s,0)", "fk_cancelamento_reserva"),
+    ("consumo_servico", "(id_reserva,id_servico,quantidade,valor_total_item)", "(%s,1,1,35)", "fk_consumo_reserva"),
+])
+def test_ct_u24_apagar_reserva_com_filho_e_recusado(conn, filho, colunas, valores, constraint):
+    """Given uma reserva com cancelamento ou com consumo de serviço
+    When a reserva é apagada
+    Then o banco recusa (ON DELETE RESTRICT), sem apagar o histórico em cascata"""
+    rid = _inserir_reserva(conn, 60, 62)
+    conn.execute(f"INSERT INTO {filho} {colunas} VALUES {valores}", (rid,))
+    estado, nome = erro_banco(conn, "DELETE FROM reserva WHERE id_reserva = %s", (rid,))
+    assert (estado, nome) == (FK, constraint)
+
+
 def test_ct_u06_valor_bruto_negativo_e_recusado(conn):
     """When valor_total_bruto = -0,01
     Then recusa com ck_reserva_valor_bruto, mas 0,00 é aceito"""

@@ -63,8 +63,8 @@ CREATE TABLE reserva (
     CONSTRAINT fk_reserva_quarto FOREIGN KEY (id_quarto)
         REFERENCES quarto(id_quarto) ON DELETE RESTRICT,
     CONSTRAINT ck_reserva_datas CHECK (data_saida_prevista > data_entrada_prevista),
-    CONSTRAINT ck_reserva_max_noites CHECK (data_saida_prevista - data_entrada_prevista <= 30),
     CONSTRAINT ck_reserva_hospedes CHECK (numero_hospedes > 0),
+    CONSTRAINT ck_reserva_max_noites CHECK (data_saida_prevista - data_entrada_prevista <= 30),
     CONSTRAINT ck_reserva_checkout CHECK (data_checkout_real >= data_checkin_real),
     CONSTRAINT ck_reserva_desconto CHECK (percentual_desconto IN (0, 5, 10)),
     CONSTRAINT ck_reserva_valor_bruto CHECK (valor_total_bruto >= 0),
@@ -87,6 +87,7 @@ CREATE TABLE cancelamento (
         REFERENCES reserva(id_reserva) ON DELETE RESTRICT,
     CONSTRAINT ck_cancelamento_taxa CHECK (taxa_multa_aplicada >= 0),
     CONSTRAINT ck_cancelamento_devido CHECK (valor_devido >= 0)
+);
 
 -- RESOLUÇÃO N:M (Reserva x Serviços Consumidos)
 CREATE TABLE servico (

@@ -87,7 +87,7 @@ def test_ct_u156_seed_financeiro_e_consistente(conn):
         LEFT JOIN cancelamento c ON c.id_reserva = r.id_reserva
         WHERE r.status_reserva IN ('CHECK-OUT','CANCELADA','NO-SHOW')
         GROUP BY r.id_reserva, r.status_reserva, r.valor_final_pago, c.taxa_multa_aplicada ORDER BY 1""")
-    assert len(linhas) == 14
+    assert len(linhas) == 15
     divergentes = [(i, s, liq, esp) for i, s, liq, esp in linhas if liq != esp]
     assert divergentes == []
 
